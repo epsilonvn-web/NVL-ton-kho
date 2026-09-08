@@ -68,6 +68,45 @@
         .form-control { width: 100%; padding: 10px 12px; min-height: 44px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none; transition: 0.3s; }
         .form-control:focus { border-color: var(--vh-blue); box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.15); }
         .search-bar { max-width: 400px; margin-bottom: 15px; }
+
+        /* HASHTAG LỌC NHANH */
+        .tag-filters-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 18px; }
+        .tag-filters-row:empty { margin-bottom: 0; }
+        .tag-group-label { font-size: 12px; color: #64748b; font-weight: 700; margin-right: 2px; }
+        .tag-pill { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; padding: 6px 14px; min-height: 32px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+        .tag-pill:hover { background: #e0e7ff; }
+        .tag-pill.active { background: var(--vh-blue); color: #fff; border-color: var(--vh-blue); }
+        .tag-pill:disabled { background: #f1f5f9; color: #cbd5e1; border-color: #e2e8f0; cursor: not-allowed; }
+        .tag-pill:disabled:hover { background: #f1f5f9; }
+
+        /* TỐI ƯU GIAO DIỆN ĐIỆN THOẠI */
+        @media (max-width: 600px) {
+            .header { padding: 10px 12px; }
+            .logo-area { gap: 8px; }
+            .logo-img-wrapper { padding: 4px 8px; }
+            .logo-img-wrapper img { height: 24px; }
+            .logo-text span:nth-child(1) { font-size: 17px; }
+            .logo-text span:nth-child(2) { font-size: 10px; }
+            .user-panel { gap: 8px; }
+            .user-info { display: none; } /* Bớt chữ "ADMIN DEMO" cho đỡ chật, chỉ còn icon tròn avatar */
+            .user-avatar { width: 30px; height: 30px; font-size: 12px; }
+
+            .main-container { margin: 15px auto; padding: 0 12px; }
+            .nav-tabs { gap: 6px; padding-bottom: 8px; margin-bottom: 14px; }
+            .nav-tab-btn { padding: 8px 12px; min-height: 38px; font-size: 12.5px; }
+
+            .stats-grid { gap: 12px; margin-bottom: 16px; }
+            .stat-card { padding: 14px; }
+            .stat-info .num { font-size: 21px; }
+
+            .panel { padding: 15px; border-radius: 8px; }
+            .panel-title { font-size: 15px; }
+
+            table { font-size: 12.5px; }
+            th, td { padding: 9px 8px; }
+
+            .tag-pill { padding: 5px 11px; font-size: 12px; min-height: 28px; }
+        }
     </style>
 </head>
 <body>
@@ -122,6 +161,8 @@
             </h3>
 
             <input type="text" id="searchInput" class="form-control search-bar" placeholder="Tra cứu mã vật tư, tên vật tư..." onkeyup="renderTable()">
+
+            <div class="tag-filters-row" id="tag-filters-container"></div>
 
             <div class="table-responsive">
                 <table>
