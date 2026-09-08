@@ -1,0 +1,25 @@
+{
+  "name": "VHIP - Tồn Kho NVL",
+  "short_name": "VHIP Tồn Kho",
+  "description": "Hệ thống quản trị tồn kho nguyên vật liệu - Vĩnh Hưng",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#2980b9",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
