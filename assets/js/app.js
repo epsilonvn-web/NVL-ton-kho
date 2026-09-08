@@ -20,6 +20,9 @@ const DEMO_DATA = {
 
 let flatInventoryList = [];   // Danh sách gộp phẳng toàn bộ vật tư, mỗi item có thêm field "sheet" (tên danh mục)
 let currentCategory = 'ALL';
+let activeGrade = null;      // Mác thép đang lọc (VD "A572"), null = không lọc theo mác
+let activeThickness = null;  // Chiều dày đang lọc (VD "08"), null = không lọc theo dày
+// Có thể bật đồng thời cả 2 - khi đó bảng chỉ hiện mã thỏa cả 2 điều kiện (mác VÀ dày)
 
 document.addEventListener('DOMContentLoaded', fetchDataFromGoogleSheets);
 
@@ -104,6 +107,8 @@ function renderCategoryTabs(sheetNames) {
 
 function filterCategory(category, btnElement) {
     currentCategory = category;
+    activeGrade = null;      // đổi tab thì bỏ hashtag đang lọc của tab cũ
+    activeThickness = null;
 
     document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
     if (btnElement) btnElement.classList.add('active');
@@ -112,7 +117,131 @@ function filterCategory(category, btnElement) {
         ? '📦 Tồn Kho Nguyên Vật Liệu (Tất cả)'
         : `📦 Danh mục: ${category}`;
 
+    renderTagFilters();
     renderTable();
+}
+
+// ---- HASHTAG LỌC NHANH THEO MÁC THÉP / CHIỀU DÀY ----
+// Tự động "đọc" tên vật tư trong danh mục đang xem để tìm ra các mác thép / chiều dày
+// xuất hiện nhiều lần, rồi biến thành các nút hashtag để bấm lọc nhanh - không cần gõ.
+
+function extractTagsForCategory(items) {
+    const gradeCounts = {};
+    const thicknessCounts = {};
+
+    items.forEach(item => {
+        const name = (item.name || '').toUpperCase();
+
+        // Mác thép: cụm chữ+số kiểu A36, SS400, Q345B, A572, Q355...
+        const gradeMatches = name.match(/\b[A-Z]{1,4}\d{2,4}[A-Z]?\b/g) || [];
+        gradeMatches.forEach(g => { gradeCounts[g] = (gradeCounts[g] || 0) + 1; });
+
+        // Chiều dày: số đầu tiên trong cụm kích thước dạng "12X1400X500"
+        const dimMatch = name.match(/(\d+(?:\.\d+)?)\s*X\s*\d+/);
+        if (dimMatch) {
+            const thickness = dimMatch[1];
+            thicknessCounts[thickness] = (thicknessCounts[thickness] || 0) + 1;
+        }
+    });
+
+    // Chỉ giữ lại giá trị xuất hiện từ 2 mã trở lên, để tránh hiện hashtag lẻ tẻ không có tác dụng lọc
+    const topGrades = Object.entries(gradeCounts)
+        .filter(([, count]) => count >= 2)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .map(([val]) => val);
+
+    const topThickness = Object.entries(thicknessCounts)
+        .filter(([, count]) => count >= 2)
+        .sort((a, b) => Number(a[0]) - Number(b[0]))
+        .slice(0, 12)
+        .map(([val]) => val);
+
+    return { grades: topGrades, thickness: topThickness };
+}
+
+function nameMatchesGrade(item, grade) {
+    return new RegExp('\\b' + grade + '\\b').test((item.name || '').toUpperCase());
+}
+
+function nameMatchesThickness(item, thickness) {
+    const name = (item.name || '').toUpperCase();
+    const dimMatch = name.match(/(\d+(?:\.\d+)?)\s*X\s*\d+/);
+    return dimMatch && dimMatch[1] === thickness;
+}
+
+function renderTagFilters() {
+    const container = document.getElementById('tag-filters-container');
+    container.innerHTML = '';
+
+    // Tab "Dashboard Tổng" gộp nhiều loại vật tư khác nhau -> hashtag sẽ không có ý nghĩa, nên bỏ qua
+    if (currentCategory === 'ALL') return;
+
+    const itemsInCategory = flatInventoryList.filter(i => i.sheet === currentCategory);
+    const { grades, thickness } = extractTagsForCategory(itemsInCategory);
+
+    if (grades.length === 0 && thickness.length === 0) return;
+
+    if (grades.length > 0) {
+        const label = document.createElement('span');
+        label.className = 'tag-group-label';
+        label.innerText = 'Mác thép:';
+        container.appendChild(label);
+        grades.forEach(g => {
+            // Đếm xem với chiều dày đang chọn (nếu có), mác này còn mã nào tồn tại không
+            const count = itemsInCategory.filter(i =>
+                nameMatchesGrade(i, g) && (!activeThickness || nameMatchesThickness(i, activeThickness))
+            ).length;
+            container.appendChild(buildTagPill('grade', g, count));
+        });
+    }
+
+    if (thickness.length > 0) {
+        const label = document.createElement('span');
+        label.className = 'tag-group-label';
+        label.innerText = 'Dày (mm):';
+        label.style.marginLeft = grades.length > 0 ? '10px' : '0';
+        container.appendChild(label);
+        thickness.forEach(t => {
+            // Đếm xem với mác đang chọn (nếu có), chiều dày này còn mã nào tồn tại không
+            const count = itemsInCategory.filter(i =>
+                nameMatchesThickness(i, t) && (!activeGrade || nameMatchesGrade(i, activeGrade))
+            ).length;
+            container.appendChild(buildTagPill('thickness', t, count));
+        });
+    }
+}
+
+function buildTagPill(type, value, matchCount) {
+    const pill = document.createElement('button');
+    pill.type = 'button';
+    pill.className = 'tag-pill';
+    pill.innerText = value;
+
+    const isActive = type === 'grade' ? activeGrade === value : activeThickness === value;
+    if (isActive) pill.classList.add('active');
+
+    // Đang chọn rồi thì luôn cho bấm để bỏ chọn, dù tổ hợp hiện tại có ra 0 kết quả hay không.
+    // Chưa chọn mà tổ hợp với lựa chọn kia không ra mã nào -> làm mờ, không cho bấm (giống chọn size hết hàng bên Shopee).
+    const isDisabled = !isActive && matchCount === 0;
+    pill.disabled = isDisabled;
+
+    pill.onclick = function () {
+        if (type === 'grade') {
+            activeGrade = (activeGrade === value) ? null : value; // bấm lại thì bỏ chọn
+        } else {
+            activeThickness = (activeThickness === value) ? null : value;
+        }
+        renderTagFilters();
+        renderTable();
+    };
+    return pill;
+}
+
+function itemMatchesActiveTag(item) {
+    if (activeGrade && !nameMatchesGrade(item, activeGrade)) return false;
+    if (activeThickness && !nameMatchesThickness(item, activeThickness)) return false;
+    return true;
 }
 
 function renderTable() {
@@ -123,7 +252,8 @@ function renderTable() {
     const filteredData = flatInventoryList.filter(item => {
         const matchesSearch = item.id.toLowerCase().includes(searchTerm) || item.name.toLowerCase().includes(searchTerm);
         const matchesCategory = currentCategory === 'ALL' || item.sheet === currentCategory;
-        return matchesSearch && matchesCategory;
+        const matchesTag = itemMatchesActiveTag(item);
+        return matchesSearch && matchesCategory && matchesTag;
     });
 
     if (filteredData.length === 0) {
