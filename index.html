@@ -32,11 +32,11 @@
         
         /* HEADER TỪ TEMPLATE CHUẨN */
         .header { background: var(--vh-brand-gradient); color: white; padding: 12px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 1000; }
-        .logo-area { display: flex; align-items: center; gap: 15px; }
+        .logo-area { display: flex; align-items: stretch; gap: 15px; }
         .logo-img-wrapper { background: #ffffff; padding: 6px 14px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; }
         .logo-img-wrapper img { height: 30px; width: auto; display: block; }
-        .logo-text { display: flex; flex-direction: column; align-items: flex-start; line-height: 1.15; }
-        .logo-text span:nth-child(1) { font-size: 22px; font-weight: 900; letter-spacing: 1px; color: #ffffff; text-shadow: 1px 1px 3px rgba(0,0,0,0.3); }
+        .logo-text { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; line-height: 1; }
+        .logo-text span:nth-child(1) { font-size: 22px; font-weight: 900; letter-spacing: 1px; color: #ffffff; text-shadow: 1px 1px 3px rgba(0,0,0,0.3); margin-top: -3px; }
         .logo-text span:nth-child(2) { font-size: 13px; font-weight: 600; letter-spacing: 0.5px; color: #a7f3d0; }
         .user-panel { display: flex; align-items: center; gap: 20px; }
         .user-avatar { width: 36px; height: 36px; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: bold; border: 2px solid white; color: white; }
@@ -1267,7 +1267,11 @@ const TAG_CONFIG = {
     },
     'THÉP KHÁC': {
         groups: [
-            { key: 'loai', label: 'Loại thép:', type: 'keywords', values: ['Thép góc', 'Thép hộp', 'Thép ray', 'Thép hình U', 'H125', 'H150', 'Chữ F', 'Chữ vương', 'Thép zam', 'Thép vằn', 'Thép tròn đặc', 'Thép tròn trơn', 'V40', 'V50', 'S45C', '0.5', '2.5', '3.0'] }
+            { key: 'loai', label: 'Loại thép:', type: 'keywords', values: ['Thép góc', 'Thép hộp', 'Thép ray', 'Thép hình U', 'Chữ F', 'Chữ vương', 'Thép zam', 'Thép vằn', 'Thép tròn đặc', 'Thép tròn trơn', 'S45C', '0.5', '2.5'] },
+            // Size thép hình (V40, V45, H125, H150...) - tự nhận diện bất kỳ số nào đi ngay sau chữ V
+            // hoặc H trong tên, không giới hạn cứng theo danh sách liệt kê nữa (trước đây V40/V50/H125/H150
+            // đều bị gõ cứng, bỏ sót mọi kích thước khác không nằm trong danh sách).
+            { key: 'size', label: 'Size:', type: 'auto-v-size' }
         ]
     },
     'BULONG': {
@@ -1316,14 +1320,17 @@ function extractAutoValues(items, type) {
 
         if (type === 'auto-grade') {
             // Mác thép: cụm chữ+số kiểu A36, SS400, Q345B, A572, Q355...
-            matches = name.match(/\b[A-Z]{1,4}\d{2,4}[A-Z]?\b/g) || [];
+            // Dùng (?!\d) thay vì \b ở cuối - phòng trường hợp tên viết dính liền số phía sau
+            // (VD "Q355B16X2000X6000" không có khoảng trắng) sẽ bị \b bỏ sót y như lỗi M16 gặp trước đó.
+            matches = name.match(/\b[A-Z]{1,4}\d{2,4}[A-Z]?(?!\d)/g) || [];
         } else if (type === 'auto-thickness') {
             // Chiều dày: số đầu tiên trong cụm kích thước dạng "12X1400X500"
             const dimMatch = name.match(/(\d+(?:\.\d+)?)\s*X\s*\d+/);
             if (dimMatch) matches = [dimMatch[1]];
         } else if (type === 'auto-bolt-strength') {
-            // Cấp bền bulong dạng "8.8", "10.9", "12.9"...
-            matches = name.match(/\b\d{1,2}\.\d\b/g) || [];
+            // Cấp bền bulong dạng "8.8", "10.9", "12.9"... - dùng (?!\d) thay vì \b ở cuối,
+            // phòng trường hợp tên viết dính liền chữ/số phía sau (VD "8.8T", "10.9-M16") mà \b không nhận ra ranh giới.
+            matches = name.match(/\b\d{1,2}\.\d(?!\d)/g) || [];
         } else if (type === 'auto-bolt-diameter') {
             // Đường kính ren dạng "M12", "M16", "M20"... - dùng (?!\d) thay vì \b ở cuối, vì tên vật tư
             // thường viết liền kiểu "M16X40" (không có khoảng trắng trước X) - \b không nhận ra ranh giới
@@ -1334,6 +1341,12 @@ function extractAutoValues(items, type) {
             // Đường kính dạng "D250", "D260" - đứng ngay trước 1 số khác có "X" ở giữa (VD "D250X108X7")
             // Dùng lookahead (?=X) thay vì \b ở cuối, vì sau số vẫn dính liền chữ X, không có khoảng trắng/ký tự phân cách.
             matches = name.match(/\bD\d{2,4}(?=X)/g) || [];
+        } else if (type === 'auto-v-size') {
+            // Size thép hình (V40, V45, V50, H125, H150...) - tự nhận diện bất kỳ số nào đi ngay sau
+            // chữ V hoặc H trong tên (2 tiền tố phổ biến của thép hình/thép hộp chữ H theo dữ liệu thực tế),
+            // không giới hạn cứng theo danh sách liệt kê nữa. Không phân biệt hoa/thường vì "name" đã được
+            // chuyển toàn bộ sang chữ hoa ở đầu hàm.
+            matches = name.match(/\b[VH]\d{2,4}(?!\d)/g) || [];
         } else if (type === 'auto-first-word') {
             // Chữ/từ đầu tiên của tên vật tư (VD "Áo đồng phục..." -> "Áo", "Bàn ren M12" -> "Bàn") -
             // giữ nguyên chữ hoa/thường gốc để hiển thị đẹp, không ép toàn bộ thành chữ in hoa.
@@ -1348,7 +1361,7 @@ function extractAutoValues(items, type) {
     // Riêng "chữ đầu", "đường kính D" và "đường kính bulong M" thì giữ từ 1 mã trở lên - vì nhiều
     // đường kính chỉ xuất hiện đúng 1-2 mã trong cả sheet (mỗi kích thước là 1 sản phẩm riêng),
     // lọc từ 2 trở lên sẽ làm mất rất nhiều hashtag.
-    const minCount = (type === 'auto-first-word' || type === 'auto-diameter-d' || type === 'auto-bolt-diameter') ? 1 : 2;
+    const minCount = (type === 'auto-first-word' || type === 'auto-diameter-d' || type === 'auto-bolt-diameter' || type === 'auto-v-size') ? 1 : 2;
     let entries = Object.entries(counts).filter(([, count]) => count >= minCount);
 
     if (type === 'auto-thickness') {
@@ -1357,9 +1370,9 @@ function extractAutoValues(items, type) {
         entries = entries.sort((a, b) => Number(a[0]) - Number(b[0]));
     } else if (type === 'auto-bolt-strength') {
         entries = entries.sort((a, b) => Number(a[0]) - Number(b[0])).slice(0, 8);
-    } else if (type === 'auto-bolt-diameter') {
-        // Nới giới hạn từ 15 lên 40 - bulong thường có rất nhiều đường kính khác nhau (M3 tới M100+),
-        // giới hạn thấp trước đây cắt mất các đường kính lớn.
+    } else if (type === 'auto-bolt-diameter' || type === 'auto-v-size') {
+        // Nới giới hạn từ 15 lên 40 - bulong/thép hình thường có nhiều kích thước khác nhau,
+        // giới hạn thấp trước đây cắt mất các kích thước lớn.
         entries = entries.sort((a, b) => Number(a[0].replace(/\D/g, '')) - Number(b[0].replace(/\D/g, ''))).slice(0, 40);
     } else if (type === 'auto-diameter-d') {
         entries = entries.sort((a, b) => Number(a[0].replace(/\D/g, '')) - Number(b[0].replace(/\D/g, ''))).slice(0, 40);
@@ -1381,11 +1394,12 @@ function itemMatchesGroupValue(item, group, value) {
         return name.includes(value.toUpperCase());
     }
     if (group.type === 'auto-grade' || group.type === 'auto-bolt-strength') {
-        return new RegExp('\\b' + escapeRegExp(value) + '\\b').test(name);
+        // Dùng (?!\d) thay vì \b ở cuối - đồng bộ với cách trích xuất, tránh bỏ sót khi tên viết dính liền số phía sau
+        return new RegExp('\\b' + escapeRegExp(value) + '(?!\\d)').test(name);
     }
-    if (group.type === 'auto-bolt-diameter') {
+    if (group.type === 'auto-bolt-diameter' || group.type === 'auto-v-size') {
         // Dùng (?!\d) giống lúc trích xuất - tránh lỗi \b không nhận ra ranh giới khi tên viết liền
-        // kiểu "M16X40" (không có khoảng trắng trước X, cả 2 đều là ký tự "chữ/số" nên \b không khớp).
+        // kiểu "M16X40" hoặc "V40X40X4" (không có khoảng trắng trước ký tự tiếp theo).
         return new RegExp('\\b' + escapeRegExp(value) + '(?!\\d)').test(name);
     }
     if (group.type === 'auto-diameter-d') {
