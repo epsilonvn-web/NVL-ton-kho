@@ -40,6 +40,78 @@
         .logo-text span:nth-child(2) { font-size: 13px; font-weight: 600; letter-spacing: 0.5px; color: #a7f3d0; }
         .user-panel { display: flex; align-items: center; gap: 20px; }
         .user-avatar { width: 36px; height: 36px; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: bold; border: 2px solid white; color: white; }
+        .btn-logout { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+        .btn-logout:hover { background: rgba(255,255,255,0.28); }
+
+        /* ===== MÀN HÌNH ĐĂNG NHẬP ===== */
+        #login-overlay {
+            position: fixed; inset: 0; z-index: 5000;
+            background: var(--vh-brand-gradient);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+        }
+        .login-card {
+            background: #ffffff; border-radius: 18px; padding: 38px 34px;
+            width: 100%; max-width: 380px; box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+            text-align: center;
+        }
+        .login-card .login-logo {
+            width: 68px; height: 68px; border-radius: 16px; background: var(--vh-brand-gradient);
+            display: flex; align-items: center; justify-content: center; margin: 0 auto 16px auto;
+            color: white; font-weight: 900; font-size: 26px; box-shadow: 0 6px 16px rgba(26,54,93,0.3);
+        }
+        .login-card h2 { margin: 0 0 4px 0; font-size: 19px; color: var(--vh-navy); font-weight: 800; }
+        .login-card .login-sub { font-size: 12.5px; color: var(--text-muted); margin-bottom: 26px; }
+        .login-card .form-control { margin-bottom: 14px; text-align: left; letter-spacing: 0.5px; }
+        .auth-tab-switch { display: flex; background: #eef5fa; border-radius: 10px; padding: 4px; margin-bottom: 20px; }
+        .auth-tab-btn { flex: 1; border: none; background: transparent; padding: 9px 6px; border-radius: 8px; font-size: 12.5px; font-weight: 700; color: var(--text-muted); cursor: pointer; transition: 0.15s ease; }
+        .auth-tab-btn.active { background: #ffffff; color: var(--vh-blue-dark); box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+        .login-card .btn-login {
+            width: 100%; background: var(--vh-brand-gradient); border: none; color: white;
+            padding: 13px; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer;
+            transition: 0.2s ease; box-shadow: 0 6px 16px rgba(26,54,93,0.3); margin-top: 4px;
+        }
+        .login-card .btn-login:hover { transform: translateY(-1px); box-shadow: 0 8px 20px rgba(26,54,93,0.4); }
+        .login-card .btn-login:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .login-error {
+            background: #fdecea; color: #c0392b; border-radius: 8px; padding: 9px 12px;
+            font-size: 12.5px; margin-bottom: 14px; text-align: left; display: none;
+        }
+        .login-footer-note { margin-top: 20px; font-size: 11px; color: #94a3b8; }
+
+        /* ===== MODAL THÔNG BÁO (thay cho alert() mặc định xấu của trình duyệt) ===== */
+        #friendly-alert-overlay {
+            display: none; position: fixed; inset: 0; z-index: 6000;
+            background: rgba(26,54,93,0.45); align-items: center; justify-content: center; padding: 20px;
+        }
+        .friendly-alert-card {
+            background: #ffffff; border-radius: 16px; padding: 28px 26px 22px 26px;
+            width: 100%; max-width: 360px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.3);
+            animation: fadeIn 0.18s ease-out;
+        }
+        .friendly-alert-icon {
+            width: 54px; height: 54px; border-radius: 50%; margin: 0 auto 14px auto;
+            display: flex; align-items: center; justify-content: center; font-size: 24px;
+        }
+        .friendly-alert-icon.success { background: #e5f7ec; color: var(--vh-green-dark); }
+        .friendly-alert-icon.error { background: #fdecea; color: var(--danger); }
+        .friendly-alert-icon.info { background: #eaf4fb; color: var(--vh-blue-dark); }
+        .friendly-alert-message { font-size: 13.5px; color: var(--vh-dark); line-height: 1.6; white-space: pre-line; margin-bottom: 20px; }
+        .friendly-alert-btn {
+            background: var(--vh-brand-gradient); border: none; color: white; padding: 10px 32px;
+            border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.2s ease;
+        }
+        .friendly-alert-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(26,54,93,0.3); }
+
+        #friendly-confirm-overlay {
+            display: none; position: fixed; inset: 0; z-index: 6100;
+            background: rgba(26,54,93,0.45); align-items: center; justify-content: center; padding: 20px;
+        }
+        .friendly-confirm-btn-cancel {
+            background: #f1f5f9; border: 1.5px solid #e2e8f0; color: var(--vh-dark); padding: 10px 26px;
+            border-radius: 10px; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.15s ease;
+        }
+        .friendly-confirm-btn-cancel:hover { background: #e2e8f0; }
 
         /* LAYOUT & TABS */
         .main-container { max-width: 1500px; margin: 25px auto; padding: 0 20px; }
@@ -182,16 +254,55 @@
 <body>
 
     <!-- HEADER -->
+    <!-- ===== MÀN HÌNH ĐĂNG NHẬP / ĐĂNG KÝ ===== -->
+    <!-- Ẩn/hiện bằng JS (checkLoginSession) - che kín toàn bộ app phía dưới cho tới khi đăng nhập thành công -->
+    <div id="login-overlay">
+        <div class="login-card">
+            <div class="login-logo">V</div>
+            <h2>VHIP - Tồn Kho NVL</h2>
+            <div class="login-sub" id="auth-subtitle">Đăng nhập để tiếp tục</div>
+
+            <div class="auth-tab-switch">
+                <button type="button" id="auth-tab-btn-login" class="auth-tab-btn active" onclick="switchAuthTab('login')">Đăng nhập</button>
+                <button type="button" id="auth-tab-btn-register" class="auth-tab-btn" onclick="switchAuthTab('register')">Đăng ký tài khoản</button>
+            </div>
+
+            <div id="login-error" class="login-error"></div>
+
+            <!-- FORM ĐĂNG NHẬP -->
+            <div id="form-login">
+                <input type="text" id="loginUsername" class="form-control" placeholder="Mã đăng nhập" autocomplete="username" onkeydown="if(event.key==='Enter') document.getElementById('loginPin').focus();">
+                <input type="password" id="loginPin" class="form-control" placeholder="Mã PIN (6 số)" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="current-password" onkeydown="if(event.key==='Enter') doLogin();">
+                <button type="button" class="btn-login" id="btn-do-login" onclick="doLogin()">🔐 Đăng nhập</button>
+                <div class="login-footer-note">Chưa có tài khoản? Bấm "Đăng ký tài khoản" ở trên.</div>
+            </div>
+
+            <!-- FORM ĐĂNG KÝ - mặc định tạo tài khoản vai trò "Người xem", trạng thái "Chờ duyệt" -
+                 quản trị viên vào Google Sheet duyệt (đổi Pending -> Active) thì mới đăng nhập được. -->
+            <div id="form-register" style="display:none;">
+                <input type="text" id="regUsername" class="form-control" placeholder="Chọn Mã đăng nhập (VD: tên viết liền không dấu)" autocomplete="username" onblur="checkUsernameAvailability()" style="margin-bottom:4px;">
+                <div id="regUsernameFeedback" style="display:none; font-size:11.5px; margin-bottom:10px; text-align:left;"></div>
+                <input type="text" id="regName" class="form-control" placeholder="Họ và tên" autocomplete="name">
+                <input type="password" id="regPin" class="form-control" placeholder="Đặt Mã PIN (6 số)" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="new-password">
+                <input type="password" id="regPinConfirm" class="form-control" placeholder="Nhập lại Mã PIN" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="new-password" onkeydown="if(event.key==='Enter') doRegister();">
+                <button type="button" class="btn-login" id="btn-do-register" onclick="doRegister()">📝 Gửi đăng ký</button>
+                <div class="login-footer-note">Sau khi đăng ký, cần quản trị viên duyệt trước khi đăng nhập được.</div>
+            </div>
+        </div>
+    </div>
+
     <div class="header">
         <div class="logo-area">
             <div class="logo-img-wrapper"><img src="logo.png" alt="Logo Vĩnh Hưng"></div>
             <div class="logo-text"><span>VHIP</span><span>TỒN KHO NVL</span></div>
         </div>
         <div class="user-panel">
-            <div class="user-info" style="color:white; font-weight:600;">
-                <span id="user-welcome-text">ADMIN DEMO</span>
+            <div class="user-info" style="color:white; font-weight:600; text-align:right; line-height:1.3;">
+                <div id="user-welcome-text">ADMIN DEMO</div>
+                <div id="user-role-text" style="font-size:11px; font-weight:400; opacity:0.85;"></div>
             </div>
             <div class="user-avatar" id="avatar-icon">AD</div>
+            <button type="button" class="btn-logout" onclick="doLogout()">Đăng xuất</button>
         </div>
     </div>
 
@@ -340,6 +451,10 @@
                 <button type="button" class="btn-export" id="btn-save-threshold" onclick="saveThresholdConfig()">💾 Lưu Lên Google Sheet</button>
                 <span id="thresholdSaveStatus" style="font-size:13px; color:#64748b;"></span>
             </div>
+
+            <p id="threshold-no-permission-note" style="display:none; background:#eaf4fb; color:var(--vh-blue-dark); padding:10px 14px; border-radius:8px; font-size:12.5px; margin-top:12px;">
+                🔒 Tài khoản của anh/chị chỉ có quyền xem danh sách cảnh báo tồn kho, không chỉnh sửa được. Liên hệ bộ phận mua hàng hoặc quản trị viên nếu cần thay đổi.
+            </p>
         </div>
 
         <!-- PANEL GỢI Ý ĐẶT HÀNG LẠI - ẩn mặc định, chỉ hiện khi bấm nút "🛒 Cần Đặt Hàng" -->
@@ -397,6 +512,288 @@
 
 // URL Google Apps Script API - lấy dữ liệu từ GGS "database" (đã IMPORTRANGE từ file kế toán)
 const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx4VqKpT_h0suRstLds24ZQKPfvb7z9Mu7ZxVtsfYFpG3LN0j5j1AnOW5_d3DMXeuPE/exec";
+
+// ============================================================================
+// ĐĂNG NHẬP / PHÂN QUYỀN
+// ----------------------------------------------------------------------------
+// 3 vai trò: admin (anh - toàn quyền), mua_hang (bộ phận mua hàng - được sửa
+// ngưỡng cảnh báo tồn kho), viewer (20 người dùng còn lại - chỉ xem, không sửa
+// được gì). Tài khoản (Mã đăng nhập | Mã PIN | Họ tên | Vai trò) lưu ở sheet
+// "TAI_KHOAN" trên Google Sheet, kiểm tra qua Apps Script (action 'login') -
+// không tải cả danh sách PIN về trình duyệt để tránh lộ mã PIN của người khác.
+// Phiên đăng nhập lưu ở localStorage, không giới hạn ngày hết hạn (đăng xuất
+// thủ công mới mất) - phù hợp môi trường nội bộ dùng trên thiết bị cá nhân.
+// ============================================================================
+const SESSION_KEY = 'vhip_session';
+let currentUser = null; // { username, name, role } sau khi đăng nhập thành công
+
+function getStoredSession() {
+    try {
+        const raw = localStorage.getItem(SESSION_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+// Kiểm tra đã đăng nhập từ trước chưa (còn phiên lưu trong localStorage) -
+// nếu có thì vào thẳng app luôn, không bắt đăng nhập lại mỗi lần mở web.
+function checkLoginSession() {
+    const session = getStoredSession();
+    if (session && session.username && session.role) {
+        currentUser = session;
+        applyLoggedInUI();
+        document.getElementById('login-overlay').style.display = 'none';
+    } else {
+        document.getElementById('login-overlay').style.display = 'flex';
+    }
+}
+
+// Modal thông báo tuỳ chỉnh (thay cho alert() mặc định xấu của trình duyệt) - type: 'success' | 'error' | 'info'
+function showAlert(message, type) {
+    type = type || 'info';
+    const icons = { success: '✓', error: '✕', info: 'ℹ' };
+    const iconEl = document.getElementById('friendly-alert-icon');
+    iconEl.className = 'friendly-alert-icon ' + type;
+    iconEl.innerText = icons[type] || icons.info;
+    document.getElementById('friendly-alert-message').innerText = message;
+    document.getElementById('friendly-alert-overlay').style.display = 'flex';
+}
+
+function closeFriendlyAlert() {
+    document.getElementById('friendly-alert-overlay').style.display = 'none';
+}
+
+// Modal xác nhận tuỳ chỉnh (thay cho confirm() mặc định) - vì hộp thoại tự làm không "chặn" luồng code
+// như confirm() gốc, phải dùng callback: truyền hàm cần chạy TIẾP nếu người dùng bấm "Đồng ý" vào
+// onConfirmCallback, hàm đó chỉ được gọi sau khi họ bấm nút, không chạy ngay lập tức.
+let pendingConfirmCallback = null;
+
+function showConfirm(message, onConfirmCallback) {
+    pendingConfirmCallback = onConfirmCallback;
+    document.getElementById('friendly-confirm-message').innerText = message;
+    document.getElementById('friendly-confirm-overlay').style.display = 'flex';
+}
+
+function closeFriendlyConfirm(confirmed) {
+    document.getElementById('friendly-confirm-overlay').style.display = 'none';
+    const callback = pendingConfirmCallback;
+    pendingConfirmCallback = null;
+    if (confirmed && typeof callback === 'function') callback();
+}
+
+// Chuyển qua lại 2 tab Đăng nhập / Đăng ký trên màn hình đăng nhập
+function switchAuthTab(tab) {
+    const isLogin = tab === 'login';
+    document.getElementById('auth-tab-btn-login').classList.toggle('active', isLogin);
+    document.getElementById('auth-tab-btn-register').classList.toggle('active', !isLogin);
+    document.getElementById('form-login').style.display = isLogin ? 'block' : 'none';
+    document.getElementById('form-register').style.display = isLogin ? 'none' : 'block';
+    document.getElementById('auth-subtitle').innerText = isLogin ? 'Đăng nhập để tiếp tục' : 'Tạo tài khoản mới - cần quản trị viên duyệt';
+    document.getElementById('login-error').style.display = 'none';
+}
+
+function doLogin() {
+    const username = document.getElementById('loginUsername').value.trim();
+    const pin = document.getElementById('loginPin').value.trim();
+    const errorBox = document.getElementById('login-error');
+    const btn = document.getElementById('btn-do-login');
+    errorBox.style.display = 'none';
+
+    if (!username || !pin) {
+        errorBox.innerText = 'Anh/chị nhập đủ Mã đăng nhập và Mã PIN nhé.';
+        errorBox.style.display = 'block';
+        return;
+    }
+    if (!/^\d{6}$/.test(pin)) {
+        errorBox.innerText = 'Mã PIN phải gồm đúng 6 chữ số.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = '⏳ Đang kiểm tra...';
+
+    // Dùng Content-Type: text/plain để tránh CORS preflight, giống hệt cách gọi saveThresholds
+    fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'login', username: username, pin: pin })
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.success) {
+                currentUser = { username: data.username, name: data.name, role: data.role };
+                localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
+                document.getElementById('login-overlay').style.display = 'none';
+                document.getElementById('loginUsername').value = '';
+                document.getElementById('loginPin').value = '';
+                applyLoggedInUI();
+            } else {
+                errorBox.innerText = (data && data.error) || 'Sai Mã đăng nhập hoặc Mã PIN.';
+                errorBox.style.display = 'block';
+            }
+        })
+        .catch(err => {
+            console.error('Lỗi đăng nhập:', err);
+            errorBox.innerText = 'Không kết nối được máy chủ - kiểm tra lại mạng rồi thử lại.';
+            errorBox.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerText = '🔐 Đăng nhập';
+        });
+}
+
+// Kiểm tra mã đăng nhập đã có người dùng chưa - gọi ngay khi anh/chị rời khỏi ô (onblur),
+// phản hồi tức thì trước khi bấm "Gửi đăng ký", đỡ phải chờ submit rồi mới biết bị trùng.
+function checkUsernameAvailability() {
+    const username = document.getElementById('regUsername').value.trim();
+    const feedback = document.getElementById('regUsernameFeedback');
+    if (!username) {
+        feedback.style.display = 'none';
+        return;
+    }
+
+    feedback.style.display = 'block';
+    feedback.style.color = '#94a3b8';
+    feedback.innerText = 'Đang kiểm tra...';
+
+    fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'checkUsername', username: username })
+    })
+        .then(res => res.json())
+        .then(data => {
+            // Nếu ô Mã đăng nhập đã bị đổi giá trị khác trong lúc chờ phản hồi (gõ nhanh rồi đổi ý),
+            // bỏ qua kết quả cũ này, tránh hiện nhầm trạng thái của 1 mã khác.
+            if (document.getElementById('regUsername').value.trim() !== username) return;
+
+            if (data && data.success) {
+                if (data.exists) {
+                    feedback.style.color = 'var(--danger)';
+                    feedback.innerText = '✕ Mã "' + username + '" đã có người đăng ký - anh/chị chọn mã khác nhé.';
+                } else {
+                    feedback.style.color = 'var(--vh-green-dark)';
+                    feedback.innerText = '✓ Mã này chưa ai dùng, đăng ký được.';
+                }
+            } else {
+                feedback.style.display = 'none';
+            }
+        })
+        .catch(() => {
+            feedback.style.display = 'none';
+        });
+}
+
+// Gửi đăng ký tài khoản mới - Apps Script tự tạo với vai trò "viewer" (chỉ xem) và trạng thái
+// "Pending" (chờ duyệt). Đăng ký xong KHÔNG tự động đăng nhập ngay - phải đợi quản trị viên
+// vào Google Sheet đổi Trạng thái thành "Active" trước.
+function doRegister() {
+    const username = document.getElementById('regUsername').value.trim();
+    const name = document.getElementById('regName').value.trim();
+    const pin = document.getElementById('regPin').value.trim();
+    const pinConfirm = document.getElementById('regPinConfirm').value.trim();
+    const errorBox = document.getElementById('login-error');
+    const btn = document.getElementById('btn-do-register');
+    errorBox.style.display = 'none';
+
+    if (!username || !name || !pin || !pinConfirm) {
+        errorBox.innerText = 'Anh/chị điền đủ Mã đăng nhập, Họ tên và Mã PIN nhé.';
+        errorBox.style.display = 'block';
+        return;
+    }
+    if (!/^\d{6}$/.test(pin)) {
+        errorBox.innerText = 'Mã PIN phải gồm đúng 6 chữ số.';
+        errorBox.style.display = 'block';
+        return;
+    }
+    if (pin !== pinConfirm) {
+        errorBox.innerText = 'Mã PIN nhập lại không khớp.';
+        errorBox.style.display = 'block';
+        return;
+    }
+
+    btn.disabled = true;
+    btn.innerText = '⏳ Đang gửi...';
+
+    fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'register', username: username, name: name, pin: pin })
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.success) {
+                showAlert('Đã gửi đăng ký thành công!\n\nTài khoản của anh/chị đang chờ quản trị viên duyệt, vui lòng quay lại đăng nhập sau nhé.', 'success');
+                document.getElementById('regUsername').value = '';
+                document.getElementById('regName').value = '';
+                document.getElementById('regPin').value = '';
+                document.getElementById('regPinConfirm').value = '';
+                switchAuthTab('login');
+                document.getElementById('loginUsername').value = username;
+            } else {
+                errorBox.innerText = (data && data.error) || 'Đăng ký thất bại, thử lại nhé.';
+                errorBox.style.display = 'block';
+            }
+        })
+        .catch(err => {
+            console.error('Lỗi đăng ký:', err);
+            errorBox.innerText = 'Không kết nối được máy chủ - kiểm tra lại mạng rồi thử lại.';
+            errorBox.style.display = 'block';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerText = '📝 Gửi đăng ký';
+        });
+}
+
+function doLogout() {
+    showConfirm('Anh/chị chắc chắn muốn đăng xuất?', function () {
+        localStorage.removeItem(SESSION_KEY);
+        location.reload(); // tải lại trang cho sạch trạng thái, quay về màn hình đăng nhập
+    });
+}
+
+// Vai trò được phép sửa ngưỡng cảnh báo tồn kho - chỉ admin và mua_hang, viewer chỉ xem
+function canEditThresholds() {
+    return !!currentUser && (currentUser.role === 'admin' || currentUser.role === 'mua_hang');
+}
+
+const ROLE_LABELS = { admin: 'Quản trị viên', mua_hang: 'Bộ phận mua hàng', viewer: 'Người xem' };
+
+// Cập nhật giao diện sau khi đăng nhập: tên/vai trò ở header, avatar viết tắt,
+// và ẩn/khóa các nút chỉnh sửa cảnh báo tồn kho nếu là viewer (chỉ xem).
+function applyLoggedInUI() {
+    if (!currentUser) return;
+    document.getElementById('user-welcome-text').innerText = currentUser.name || currentUser.username;
+    document.getElementById('user-role-text').innerText = ROLE_LABELS[currentUser.role] || '';
+    const initials = (currentUser.name || currentUser.username || '?').trim().split(/\s+/).map(w => w[0]).slice(-2).join('').toUpperCase();
+    document.getElementById('avatar-icon').innerText = initials || '?';
+
+    applyThresholdPermissionUI();
+}
+
+// Khóa toàn bộ khu vực chỉnh sửa cảnh báo tồn kho nếu tài khoản không có quyền (viewer) -
+// vẫn cho xem danh sách đã cấu hình bình thường, chỉ ẩn/khóa phần thao tác thay đổi.
+function applyThresholdPermissionUI() {
+    const allowed = canEditThresholds();
+    const addRow = document.querySelector('.threshold-add-row');
+    const manualLink = document.querySelector('#manualThresholdForm')?.previousElementSibling;
+    const saveBtn = document.getElementById('btn-save-threshold');
+    const noPermNote = document.getElementById('threshold-no-permission-note');
+
+    if (addRow) addRow.style.display = allowed ? '' : 'none';
+    if (manualLink) manualLink.style.display = allowed ? '' : 'none';
+    if (!allowed) hideManualThresholdForm();
+    if (saveBtn) saveBtn.style.display = allowed ? '' : 'none';
+    if (noPermNote) noPermNote.style.display = allowed ? 'none' : 'block';
+
+    // Vô hiệu hóa ô sửa ngưỡng + nút Xóa/Hoàn tác trong bảng cấu hình nếu không có quyền
+    document.querySelectorAll('.threshold-inline-input').forEach(el => el.disabled = !allowed);
+    document.querySelectorAll('#thresholdConfigTableBody .btn-refresh').forEach(el => el.disabled = !allowed);
+}
 
 // Dữ liệu demo dự phòng - dùng khi chưa gọi được GAS_API_URL
 const DEMO_DATA = {
@@ -643,7 +1040,10 @@ function getStockColorHex(status) {
 
 // activeTagsByGroup (dùng cho hashtag lọc nhanh) được khai báo cùng khối code hashtag bên dưới
 
-document.addEventListener('DOMContentLoaded', fetchDataFromGoogleSheets);
+document.addEventListener('DOMContentLoaded', function () {
+    checkLoginSession();
+    fetchDataFromGoogleSheets();
+});
 
 // Đăng ký Service Worker - bật tính năng PWA (cài ra màn hình chính điện thoại, mở lên
 // không có thanh địa chỉ, và vẫn hiện được dữ liệu lần tải gần nhất khi mất mạng tạm thời).
@@ -874,7 +1274,7 @@ const TAG_CONFIG = {
         // Suy đoán: bulong thường phân theo cấp bền (8.8, 10.9...) và đường kính ren (M12, M16...)
         groups: [
             { key: 'strength', label: 'Cấp bền:', type: 'auto-bolt-strength' },
-            { key: 'diameter', label: 'Đường kính (M):', type: 'auto-bolt-diameter' }
+            { key: 'diameter', label: 'Size:', type: 'auto-bolt-diameter' }
         ]
     },
     'TẤM TRƯỢT': {
@@ -925,8 +1325,11 @@ function extractAutoValues(items, type) {
             // Cấp bền bulong dạng "8.8", "10.9", "12.9"...
             matches = name.match(/\b\d{1,2}\.\d\b/g) || [];
         } else if (type === 'auto-bolt-diameter') {
-            // Đường kính ren dạng "M12", "M16", "M20"...
-            matches = name.match(/\bM\d{1,3}\b/g) || [];
+            // Đường kính ren dạng "M12", "M16", "M20"... - dùng (?!\d) thay vì \b ở cuối, vì tên vật tư
+            // thường viết liền kiểu "M16X40" (không có khoảng trắng trước X) - \b không nhận ra ranh giới
+            // giữa số và chữ X (cả 2 đều là ký tự "chữ/số" nên không phải ranh giới thật), khiến rất nhiều
+            // mã có tên dạng này bị bỏ sót hoàn toàn khỏi hashtag.
+            matches = name.match(/\bM\d{1,3}(?!\d)/g) || [];
         } else if (type === 'auto-diameter-d') {
             // Đường kính dạng "D250", "D260" - đứng ngay trước 1 số khác có "X" ở giữa (VD "D250X108X7")
             // Dùng lookahead (?=X) thay vì \b ở cuối, vì sau số vẫn dính liền chữ X, không có khoảng trắng/ký tự phân cách.
@@ -942,9 +1345,10 @@ function extractAutoValues(items, type) {
     });
 
     // Chỉ giữ giá trị xuất hiện từ 2 mã trở lên, tránh hashtag lẻ tẻ không có tác dụng lọc.
-    // Riêng "chữ đầu" và "đường kính D" thì giữ từ 1 mã trở lên - vì nhiều đường kính/từ chỉ xuất hiện đúng 1 lần
-    // trong cả sheet (mỗi kích thước là 1 sản phẩm riêng), lọc từ 2 trở lên sẽ làm mất rất nhiều hashtag.
-    const minCount = (type === 'auto-first-word' || type === 'auto-diameter-d') ? 1 : 2;
+    // Riêng "chữ đầu", "đường kính D" và "đường kính bulong M" thì giữ từ 1 mã trở lên - vì nhiều
+    // đường kính chỉ xuất hiện đúng 1-2 mã trong cả sheet (mỗi kích thước là 1 sản phẩm riêng),
+    // lọc từ 2 trở lên sẽ làm mất rất nhiều hashtag.
+    const minCount = (type === 'auto-first-word' || type === 'auto-diameter-d' || type === 'auto-bolt-diameter') ? 1 : 2;
     let entries = Object.entries(counts).filter(([, count]) => count >= minCount);
 
     if (type === 'auto-thickness') {
@@ -954,7 +1358,9 @@ function extractAutoValues(items, type) {
     } else if (type === 'auto-bolt-strength') {
         entries = entries.sort((a, b) => Number(a[0]) - Number(b[0])).slice(0, 8);
     } else if (type === 'auto-bolt-diameter') {
-        entries = entries.sort((a, b) => Number(a[0].replace(/\D/g, '')) - Number(b[0].replace(/\D/g, ''))).slice(0, 15);
+        // Nới giới hạn từ 15 lên 40 - bulong thường có rất nhiều đường kính khác nhau (M3 tới M100+),
+        // giới hạn thấp trước đây cắt mất các đường kính lớn.
+        entries = entries.sort((a, b) => Number(a[0].replace(/\D/g, '')) - Number(b[0].replace(/\D/g, ''))).slice(0, 40);
     } else if (type === 'auto-diameter-d') {
         entries = entries.sort((a, b) => Number(a[0].replace(/\D/g, '')) - Number(b[0].replace(/\D/g, ''))).slice(0, 40);
     } else if (type === 'auto-first-word') {
@@ -974,8 +1380,13 @@ function itemMatchesGroupValue(item, group, value) {
         // Khớp dạng chứa cụm từ - dùng cho cả cụm nhiều từ ("Đĩa cao su") lẫn mã ngắn ("NR", "EPDM")
         return name.includes(value.toUpperCase());
     }
-    if (group.type === 'auto-grade' || group.type === 'auto-bolt-strength' || group.type === 'auto-bolt-diameter') {
+    if (group.type === 'auto-grade' || group.type === 'auto-bolt-strength') {
         return new RegExp('\\b' + escapeRegExp(value) + '\\b').test(name);
+    }
+    if (group.type === 'auto-bolt-diameter') {
+        // Dùng (?!\d) giống lúc trích xuất - tránh lỗi \b không nhận ra ranh giới khi tên viết liền
+        // kiểu "M16X40" (không có khoảng trắng trước X, cả 2 đều là ký tự "chữ/số" nên \b không khớp).
+        return new RegExp('\\b' + escapeRegExp(value) + '(?!\\d)').test(name);
     }
     if (group.type === 'auto-diameter-d') {
         // Dùng lookahead (?=X) giống lúc trích xuất, vì sau số dính liền "X" chứ không có khoảng trắng
@@ -1302,12 +1713,12 @@ function updateStockWarningStats(items, isPriceView) {
 // Xuất đúng dữ liệu ĐANG HIỂN THỊ trên bảng (đã áp dụng tab/tìm kiếm/hashtag/sắp xếp) ra file Excel thật (.xlsx)
 function exportToExcel() {
     if (typeof XLSX === 'undefined') {
-        alert('Không tải được thư viện xuất Excel (có thể do mất mạng). Anh thử tải lại trang rồi bấm lại giúp em.');
+        showAlert('Không tải được thư viện xuất Excel (có thể do mất mạng). Anh thử tải lại trang rồi bấm lại giúp em.', 'error');
         return;
     }
 
     if (!lastRenderedData || lastRenderedData.length === 0) {
-        alert('Không có dữ liệu để xuất - anh kiểm tra lại bộ lọc/tìm kiếm hiện tại nhé.');
+        showAlert('Không có dữ liệu để xuất - anh kiểm tra lại bộ lọc/tìm kiếm hiện tại nhé.', 'error');
         return;
     }
 
@@ -1493,36 +1904,42 @@ function confirmManualThresholdEntry() {
     // nếu lỡ bấm xác nhận nhiều lần). Nếu chưa biết mã thật bên kế toán, anh tự đặt 1 mã tạm dễ nhớ
     // (VD: "TAM-THEP60") - miễn là chính anh chủ động biết và nhớ được mã đó là gì.
     if (!id || !name) {
-        alert('Anh nhập đủ Mã vật tư và Tên vật tư trước khi xác nhận nhé. Nếu chưa biết mã thật, anh tự đặt 1 mã tạm dễ nhớ (VD: TAM-THEP60) để sau này còn tìm lại được.');
+        showAlert('Anh nhập đủ Mã vật tư và Tên vật tư trước khi xác nhận nhé. Nếu chưa biết mã thật, anh tự đặt 1 mã tạm dễ nhớ (VD: TAM-THEP60) để sau này còn tìm lại được.', 'error');
         return;
     }
     if (!sheet) {
-        alert('Chưa có danh mục nào để chọn - anh Làm mới dữ liệu 1 lần cho có dữ liệu danh mục rồi thử lại nhé.');
+        showAlert('Chưa có danh mục nào để chọn - anh Làm mới dữ liệu 1 lần cho có dữ liệu danh mục rồi thử lại nhé.', 'error');
         return;
     }
 
     // Cảnh báo nhẹ nếu mã này thực ra ĐÃ có sẵn trong dữ liệu thật - tránh trường hợp anh gõ nhầm mã đã tồn tại,
     // vì nếu vậy nên dùng ô tìm kiếm phía trên để chọn đúng dòng thật (có đầy đủ tồn kho hiện tại) thay vì nhập thủ công.
     const alreadyReal = flatInventoryList.some(i => String(i.id).toLowerCase() === id.toLowerCase() && !isPriceSheetName(i.sheet));
-    if (alreadyReal && !confirm(`Mã "${id}" hình như đã có sẵn trong dữ liệu tồn kho thật. Anh có chắc muốn nhập thủ công đè lên không? (Nên dùng ô tìm kiếm phía trên để chọn đúng dòng thật thay vì bấm OK ở đây)`)) {
-        return;
-    }
 
-    pendingThresholdItem = { id: id, name: name, sheet: sheet, unit: unit };
-    document.getElementById('thresholdSearchInput').value = `${id} - ${name} (nhập thủ công)`;
-    hideManualThresholdForm();
-    document.getElementById('manualThresholdHint').style.display = 'block';
+    const finishManualEntry = function () {
+        pendingThresholdItem = { id: id, name: name, sheet: sheet, unit: unit };
+        document.getElementById('thresholdSearchInput').value = `${id} - ${name} (nhập thủ công)`;
+        hideManualThresholdForm();
+        document.getElementById('manualThresholdHint').style.display = 'block';
+    };
+
+    if (alreadyReal) {
+        showConfirm(`Mã "${id}" hình như đã có sẵn trong dữ liệu tồn kho thật. Anh có chắc muốn nhập thủ công đè lên không? (Nên dùng ô tìm kiếm phía trên để chọn đúng dòng thật thay vì bấm ở đây)`, finishManualEntry);
+    } else {
+        finishManualEntry();
+    }
 }
 
 function addThresholdItem() {
+    if (!canEditThresholds()) return;
     if (!pendingThresholdItem) {
-        alert('Anh gõ mã/tên vật tư rồi bấm chọn đúng 1 dòng trong danh sách gợi ý hiện ra bên dưới đã nhé.');
+        showAlert('Anh gõ mã/tên vật tư rồi bấm chọn đúng 1 dòng trong danh sách gợi ý hiện ra bên dưới đã nhé.', 'error');
         return;
     }
 
     const thresholdVal = parseFloat(document.getElementById('thresholdValueInput').value);
     if (isNaN(thresholdVal) || thresholdVal < 0) {
-        alert('Anh nhập ngưỡng cảnh báo là 1 số >= 0 nhé.');
+        showAlert('Anh nhập ngưỡng cảnh báo là 1 số >= 0 nhé.', 'error');
         return;
     }
 
@@ -1556,6 +1973,7 @@ function addThresholdItem() {
 // nằm trên web cho tới khi bấm "Lưu Lên Google Sheet". Làm vậy để anh có thể xem lại/đổi ý (bấm lại để huỷ đánh dấu)
 // trước khi xóa thật, và để hành vi giữa "Xóa" và "Thêm" nhất quán - đều cần bấm Lưu mới ghi thật lên Sheet.
 function toggleMarkForDelete(id) {
+    if (!canEditThresholds()) return;
     const target = thresholdConfig.find(t => t.id === id);
     if (target) target.markedForDelete = !target.markedForDelete;
     renderThresholdConfigTable();
@@ -1622,6 +2040,7 @@ function renderThresholdConfigTable() {
             ? 'Chưa có mã vật tư nào được cấu hình cảnh báo. Anh tìm và thêm mã ở ô phía trên nhé.'
             : `Không có mã nào thuộc danh mục "${escapeHtml(thresholdCategoryFilter)}" trong danh sách cảnh báo.`;
         tbody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8; padding:16px;">${emptyMsg}</td></tr>`;
+        applyThresholdPermissionUI();
         return;
     }
 
@@ -1644,14 +2063,17 @@ function renderThresholdConfigTable() {
         </tr>
     `;
     }).join('');
+
+    applyThresholdPermissionUI(); // ô/nút vừa được vẽ lại (DOM mới) - phải áp lại khóa quyền ngay, không thì viewer vẫn bấm sửa được
 }
 
 // Cho phép sửa thẳng số ngưỡng ngay trong bảng cấu hình - khỏi phải tìm/chọn lại mã từ ô tìm kiếm phía trên
 // chỉ để đổi 1 con số. onchange chỉ chạy khi rời khỏi ô (blur/Enter) nên không bị mất focus lúc đang gõ dở.
 function updateThresholdValue(id, rawValue) {
+    if (!canEditThresholds()) { renderThresholdConfigTable(); return; }
     const val = parseFloat(rawValue);
     if (isNaN(val) || val < 0) {
-        alert('Ngưỡng cảnh báo phải là số >= 0 nhé anh.');
+        showAlert('Ngưỡng cảnh báo phải là số >= 0 nhé anh.', 'error');
         renderThresholdConfigTable(); // nhập sai thì trả ô input về giá trị cũ, tránh lưu nhầm giá trị rác
         return;
     }
@@ -1738,11 +2160,11 @@ function renderReorderPanel() {
 
 function exportReorderList() {
     if (typeof XLSX === 'undefined') {
-        alert('Không tải được thư viện xuất Excel (có thể do mất mạng). Anh thử tải lại trang rồi bấm lại giúp em.');
+        showAlert('Không tải được thư viện xuất Excel (có thể do mất mạng). Anh thử tải lại trang rồi bấm lại giúp em.', 'error');
         return;
     }
     if (!lastReorderList || lastReorderList.length === 0) {
-        alert('Hiện không có mã nào cần đặt hàng lại để xuất.');
+        showAlert('Hiện không có mã nào cần đặt hàng lại để xuất.', 'error');
         return;
     }
 
@@ -1772,6 +2194,10 @@ function exportReorderList() {
 // Đồng thời đây cũng là lúc XÓA THẬT các dòng đang được đánh dấu cam (chờ xóa) - loại hẳn khỏi thresholdConfig
 // trước khi gửi đi, để cả web lẫn Google Sheet đồng bộ đúng lúc này.
 function saveThresholdConfig() {
+    if (!canEditThresholds()) {
+        showAlert('Tài khoản của anh/chị không có quyền lưu thay đổi cảnh báo tồn kho.', 'error');
+        return;
+    }
     const btn = document.getElementById('btn-save-threshold');
     const status = document.getElementById('thresholdSaveStatus');
     btn.disabled = true;
@@ -1811,5 +2237,26 @@ function saveThresholdConfig() {
 }
 
     </script>
+    <!-- ===== MODAL THÔNG BÁO (thay cho alert() mặc định) ===== -->
+    <div id="friendly-alert-overlay">
+        <div class="friendly-alert-card">
+            <div id="friendly-alert-icon" class="friendly-alert-icon success">✓</div>
+            <div id="friendly-alert-message" class="friendly-alert-message"></div>
+            <button type="button" class="friendly-alert-btn" onclick="closeFriendlyAlert()">Đã hiểu</button>
+        </div>
+    </div>
+
+    <!-- ===== MODAL XÁC NHẬN (thay cho confirm() mặc định) ===== -->
+    <div id="friendly-confirm-overlay">
+        <div class="friendly-alert-card">
+            <div class="friendly-alert-icon info">❓</div>
+            <div id="friendly-confirm-message" class="friendly-alert-message"></div>
+            <div style="display:flex; gap:10px; justify-content:center;">
+                <button type="button" class="friendly-confirm-btn-cancel" onclick="closeFriendlyConfirm(false)">Hủy</button>
+                <button type="button" class="friendly-alert-btn" onclick="closeFriendlyConfirm(true)">Đồng ý</button>
+            </div>
+        </div>
+    </div>
+
 </body>
 </html>
