@@ -9,21 +9,29 @@
     <link rel="manifest" href="assets/data/manifest.json">
     <meta name="theme-color" content="#2980b9">
     <link rel="apple-touch-icon" href="assets/images/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
         :root {
             --vh-green: #27ae60;
+            --vh-green-dark: #1e8449;
             --vh-blue: #2980b9;
-            --vh-dark: #2c3e50;
-            --bg-color: #f4f6f9;
+            --vh-blue-dark: #1a5f8a;
+            --vh-navy: #1a365d;
+            --vh-dark: #1c2b3a;
+            --vh-brand-gradient: linear-gradient(135deg, var(--vh-navy) 0%, var(--vh-blue) 55%, var(--vh-green) 100%);
+            --bg-color: #f0f4f8;
             --card-bg: #ffffff;
             --danger: #e74c3c;
             --warning: #f39c12;
-            --border-color: #cbd5e1;
+            --border-color: #d7e0e9;
+            --text-muted: #5b6b7c;
         }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: var(--bg-color); color: var(--vh-dark); }
+        body { font-family: 'Plus Jakarta Sans', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: var(--bg-color); color: var(--vh-dark); }
         
         /* HEADER TỪ TEMPLATE CHUẨN */
-        .header { background: linear-gradient(135deg, #1a365d 0%, #2980b9 45%, #27ae60 100%); color: white; padding: 12px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 1000; }
+        .header { background: var(--vh-brand-gradient); color: white; padding: 12px 30px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2); position: sticky; top: 0; z-index: 1000; }
         .logo-area { display: flex; align-items: center; gap: 15px; }
         .logo-img-wrapper { background: #ffffff; padding: 6px 14px; border-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: center; }
         .logo-img-wrapper img { height: 30px; width: auto; display: block; }
@@ -44,8 +52,8 @@
         }
         .nav-tab-btn:hover { border-color: var(--vh-blue); color: var(--vh-blue); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(41,128,185,0.12); }
         .nav-tab-btn.active {
-            background: linear-gradient(135deg, var(--vh-blue) 0%, #1a5f8a 100%); color: white; border-color: transparent;
-            box-shadow: 0 4px 12px rgba(41,128,185,0.3); transform: translateY(-1px);
+            background: var(--vh-brand-gradient); color: white; border-color: transparent;
+            box-shadow: 0 4px 12px rgba(26,54,93,0.3); transform: translateY(-1px);
         }
         .view-pane { display: none; animation: fadeIn 0.3s ease-in-out; }
         .view-pane.active { display: block; }
@@ -71,19 +79,21 @@
         .stat-bar-num { font-size: 18px; font-weight: 800; color: var(--vh-dark); }
         .stat-bar-group { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
         
-        .panel { background: var(--card-bg); border-radius: 10px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; }
+        .panel { background: var(--card-bg); border-radius: 12px; padding: 25px; box-shadow: 0 2px 12px rgba(26,54,93,0.07); margin-bottom: 25px; border-top: 3px solid transparent; border-image: var(--vh-brand-gradient) 1; }
         .panel-title { font-size: 17px; font-weight: bold; color: var(--vh-dark); margin-top: 0; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; flex-wrap: wrap; gap: 10px; }
 
         /* BẢNG DỮ LIỆU */
         .table-responsive { overflow-x: auto; overflow-y: visible; width: 100%; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 100%; }
-        th, td { border: 1px solid #e2e8f0; padding: 9.6px 12px; text-align: center; vertical-align: middle; }
-        th { background: #f8fafc; color: #6b21a8; font-weight: 700; white-space: nowrap; }
+        th, td { border: 1px solid var(--border-color); padding: 10px 12px; text-align: center; vertical-align: middle; }
+        th { background: #eef5fa; color: var(--vh-navy); font-weight: 700; white-space: nowrap; border-bottom: 2px solid var(--vh-blue); }
         th.sortable { cursor: pointer; user-select: none; }
-        th.sortable:hover { background: #f1f5f9; }
+        th.sortable:hover { background: #e1eef7; }
+        tbody tr:nth-child(even) { background: #f9fbfd; }
+        tbody tr:hover { background: #eaf6ef; }
         .sort-arrow { font-size: 10px; margin-left: 4px; display: inline-block; }
         .sort-arrow-inactive { color: #cbd5e1; }
-        .sort-arrow-active { color: #6b21a8; }
+        .sort-arrow-active { color: var(--vh-blue); }
         .text-left { text-align: left !important; padding-left: 15px !important; }
         .text-right { text-align: right !important; padding-right: 15px !important; }
 
@@ -92,23 +102,23 @@
         .badge-success { background: #d4edda; color: #155724; }
         .badge-warning { background: #fff3cd; color: #856404; }
         .badge-danger { background: #f8d7da; color: #721c24; }
-        .badge-info { background: #e2e8f0; color: #334155; }
+        .badge-info { background: #dceefa; color: var(--vh-blue-dark); }
 
         /* TÌM KIẾM */
-        .form-control { width: 100%; padding: 10px 12px; min-height: 44px; border: 1px solid var(--border-color); border-radius: 6px; box-sizing: border-box; font-size: 14px; outline: none; transition: 0.3s; }
+        .form-control { width: 100%; padding: 10px 12px; min-height: 44px; border: 1.5px solid var(--border-color); border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; transition: 0.2s ease; }
         .form-control:focus { border-color: var(--vh-blue); box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.15); }
         .search-bar { max-width: 400px; margin-bottom: 15px; }
 
         /* THANH TRẠNG THÁI ĐỒNG BỘ DỮ LIỆU */
-        .sync-status-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #eef2f7; color: #475569; padding: 8px 14px; border-radius: 8px; font-size: 12.5px; margin-bottom: 15px; }
-        .btn-refresh { background: #ffffff; border: 1px solid var(--border-color); color: var(--vh-blue); padding: 6px 14px; min-height: 32px; border-radius: 6px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: 0.15s; white-space: nowrap; }
-        .btn-refresh:hover { background: #f1f5f9; }
+        .sync-status-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; background: #e7f1f8; color: var(--vh-navy); padding: 9px 16px; border-radius: 10px; font-size: 12.5px; margin-bottom: 15px; font-weight: 500; }
+        .btn-refresh { background: #ffffff; border: 1.5px solid #cfe3ef; color: var(--vh-blue-dark); padding: 7px 15px; min-height: 32px; border-radius: 8px; font-size: 12.5px; font-weight: 600; cursor: pointer; transition: 0.15s ease; white-space: nowrap; }
+        .btn-refresh:hover { background: #eaf4fb; border-color: var(--vh-blue); }
         .btn-refresh:disabled { color: #94a3b8; cursor: not-allowed; }
         .btn-refresh.active { background: var(--vh-blue); color: #fff; border-color: var(--vh-blue); }
 
         /* NÚT XUẤT EXCEL */
-        .btn-export { background: var(--vh-green); border: none; color: #fff; padding: 10px 16px; min-height: 44px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: 0.15s; white-space: nowrap; }
-        .btn-export:hover { background: #1e8449; }
+        .btn-export { background: linear-gradient(135deg, var(--vh-green) 0%, var(--vh-green-dark) 100%); border: none; color: #fff; padding: 10px 18px; min-height: 44px; border-radius: 8px; font-size: 14px; font-weight: 700; cursor: pointer; transition: 0.18s ease; white-space: nowrap; box-shadow: 0 3px 8px rgba(39,174,96,0.25); }
+        .btn-export:hover { box-shadow: 0 5px 14px rgba(39,174,96,0.35); transform: translateY(-1px); }
         .search-bar-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 15px; }
         .search-bar-row .search-bar { margin-bottom: 0; flex: 1 1 260px; }
 
@@ -127,9 +137,9 @@
         .tag-filters-row { display: flex; flex-direction: column; gap: 10px; margin-bottom: 18px; }
         .tag-filters-row:empty { margin-bottom: 0; }
         .tag-group-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-        .tag-group-label { font-size: 12px; color: #6b21a8; font-weight: 700; margin-right: 2px; white-space: nowrap; }
-        .tag-pill { background: #eef2ff; color: #3730a3; border: 1px solid #c7d2fe; padding: 6px 14px; min-height: 32px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
-        .tag-pill:hover { background: #e0e7ff; }
+        .tag-group-label { font-size: 12px; color: var(--vh-blue-dark); font-weight: 700; margin-right: 2px; white-space: nowrap; }
+        .tag-pill { background: #eaf4fb; color: var(--vh-blue-dark); border: 1px solid #bfe0f2; padding: 6px 14px; min-height: 32px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+        .tag-pill:hover { background: #d7ecf8; }
         .tag-pill.active { background: var(--vh-blue); color: #fff; border-color: var(--vh-blue); }
         .tag-pill:disabled { background: #f1f5f9; color: #cbd5e1; border-color: #e2e8f0; cursor: not-allowed; }
         .tag-pill:disabled:hover { background: #f1f5f9; }
@@ -549,7 +559,7 @@ function renderStockChart(items, isPriceView) {
                     ${escapeHtml(item.name)}
                 </div>
                 <div style="flex:1; background:#f1f5f9; border-radius:6px; overflow:hidden; height:22px; position:relative;">
-                    <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, var(--vh-blue), #5dade2); border-radius:6px;"></div>
+                    <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, var(--vh-blue), var(--vh-green)); border-radius:6px;"></div>
                 </div>
                 <div style="flex:0 0 60px; font-size:13px; font-weight:700; color:var(--vh-dark);">${item.stock.toLocaleString('en-US')}</div>
             </div>
