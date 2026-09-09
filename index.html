@@ -35,26 +35,40 @@
 
         /* LAYOUT & TABS */
         .main-container { max-width: 1500px; margin: 25px auto; padding: 0 20px; }
-        .nav-tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #cbd5e1; padding-bottom: 10px; flex-wrap: wrap; }
-        .nav-tab-btn { background: #e2e8f0; border: none; padding: 10px 18px; min-height: 44px; border-radius: 6px; font-weight: 600; cursor: pointer; transition: 0.3s; font-size: 14px; color: #475569; display: flex; align-items: center; justify-content: center; gap: 5px; }
-        .nav-tab-btn.active { background: var(--vh-blue); color: white; box-shadow: 0 4px 10px rgba(41,128,185,0.2); }
+        .nav-tabs { display: flex; gap: 8px; margin-bottom: 22px; border-bottom: none; padding-bottom: 4px; flex-wrap: wrap; }
+        .nav-tab-btn {
+            background: #ffffff; border: 1.5px solid #e2e8f0; padding: 10px 18px; min-height: 44px;
+            border-radius: 999px; font-weight: 600; cursor: pointer; transition: 0.2s ease; font-size: 13.5px;
+            color: #475569; display: flex; align-items: center; justify-content: center; gap: 6px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+        }
+        .nav-tab-btn:hover { border-color: var(--vh-blue); color: var(--vh-blue); transform: translateY(-1px); box-shadow: 0 4px 10px rgba(41,128,185,0.12); }
+        .nav-tab-btn.active {
+            background: linear-gradient(135deg, var(--vh-blue) 0%, #1a5f8a 100%); color: white; border-color: transparent;
+            box-shadow: 0 4px 12px rgba(41,128,185,0.3); transform: translateY(-1px);
+        }
         .view-pane { display: none; animation: fadeIn 0.3s ease-in-out; }
         .view-pane.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 
         /* STAT BAR - gọn, cỡ tương đương 1 nút tab (VD "Dashboard Tổng"), không chiếm hết chiều ngang */
-        .stat-bar { background: var(--card-bg); padding: 8px 16px; min-height: 44px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); border-left: 4px solid var(--vh-blue); display: inline-flex; align-items: center; gap: 8px; box-sizing: border-box; }
-        .stat-bar.warning { border-left-color: var(--warning); }
-        .stat-bar.danger { border-left-color: var(--danger); }
-        .stat-bar.clickable { cursor: pointer; transition: 0.15s; }
-        .stat-bar.clickable:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.14); }
+        .stat-bar {
+            background: var(--card-bg); padding: 10px 18px; min-height: 48px; border-radius: 10px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.06); border-left: 4px solid var(--vh-blue);
+            display: inline-flex; align-items: center; gap: 10px; box-sizing: border-box;
+        }
+        .stat-bar-icon { font-size: 19px; line-height: 1; }
+        .stat-bar.warning { border-left-color: var(--warning); background: linear-gradient(135deg, #fff 60%, #fff8ec 100%); }
+        .stat-bar.danger { border-left-color: var(--danger); background: linear-gradient(135deg, #fff 60%, #fef0ef 100%); }
+        .stat-bar.clickable { cursor: pointer; transition: 0.2s ease; }
+        .stat-bar.clickable:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .stat-bar.not-clickable { cursor: default; opacity: 0.6; }
         .stat-bar.warning.active-filter { background: var(--warning); }
         .stat-bar.warning.active-filter .stat-bar-label, .stat-bar.warning.active-filter .stat-bar-num { color: #fff !important; }
         .stat-bar.danger.active-filter { background: var(--danger); }
         .stat-bar.danger.active-filter .stat-bar-label, .stat-bar.danger.active-filter .stat-bar-num { color: #fff !important; }
         .stat-bar-label { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; white-space: nowrap; }
-        .stat-bar-num { font-size: 16px; font-weight: bold; color: var(--vh-dark); }
+        .stat-bar-num { font-size: 18px; font-weight: 800; color: var(--vh-dark); }
         .stat-bar-group { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
         
         .panel { background: var(--card-bg); border-radius: 10px; padding: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 25px; }
@@ -103,6 +117,7 @@
         .threshold-add-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; }
         .threshold-search-wrap { position: relative; flex: 1 1 280px; }
         .threshold-value-input { max-width: 170px; }
+        .threshold-inline-input { max-width: 90px; margin: 0 auto; text-align: center; padding: 6px 8px; min-height: 32px; }
         .threshold-suggestions { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #fff; border: 1px solid var(--border-color); border-radius: 6px; box-shadow: 0 8px 20px rgba(0,0,0,0.12); max-height: 260px; overflow-y: auto; z-index: 50; margin-top: 4px; }
         .threshold-suggestion-item { padding: 9px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #f1f5f9; text-align: left; }
         .threshold-suggestion-item:last-child { border-bottom: none; }
@@ -196,14 +211,17 @@
         <!-- STATS -->
         <div class="stat-bar-group">
             <div class="stat-bar">
+                <span class="stat-bar-icon">📋</span>
                 <span class="stat-bar-label">Số Mã Đang Hiển Thị</span>
                 <span class="stat-bar-num" id="stat-total">0</span>
             </div>
             <div class="stat-bar warning" id="stat-low-wrap" onclick="toggleStockFilter('low')">
+                <span class="stat-bar-icon">⚠️</span>
                 <span class="stat-bar-label">Sắp Hết Hàng</span>
                 <span class="stat-bar-num" id="stat-low" style="color:var(--warning);">0</span>
             </div>
             <div class="stat-bar danger" id="stat-out-wrap" onclick="toggleStockFilter('out')">
+                <span class="stat-bar-icon">⛔</span>
                 <span class="stat-bar-label">Hết Hàng</span>
                 <span class="stat-bar-num" id="stat-out" style="color:var(--danger);">0</span>
             </div>
@@ -211,10 +229,6 @@
 
         <!-- MAIN PANEL -->
         <div class="panel view-pane active" id="inventory-panel">
-            <h3 class="panel-title">
-                <span id="panel-heading">📦 Tồn Kho Nguyên Vật Liệu</span>
-            </h3>
-
             <div class="search-bar-row">
                 <input type="text" id="searchInput" class="form-control search-bar" placeholder="Tra cứu mã vật tư, tên vật tư..." onkeyup="renderTable()">
                 <button type="button" class="btn-refresh" id="btn-toggle-movement" onclick="toggleMovementColumns()">📊 Hiện Tồn Đầu/Nhập/Xuất</button>
@@ -262,12 +276,41 @@
                 <button type="button" class="btn-export" onclick="addThresholdItem()">+ Thêm</button>
             </div>
 
-            <div class="table-responsive" style="margin-top:18px;">
+            <div style="margin-top:8px;">
+                <a href="javascript:void(0)" onclick="toggleManualThresholdForm()" style="font-size:12.5px; color:var(--vh-blue); text-decoration:none;">
+                    Không tìm thấy mã cần thêm? Nhập thủ công mã mới (VD: mã quan trọng nhưng tồn = 0, kế toán chưa/không xuất hiện trong Sheet)
+                </a>
+            </div>
+
+            <!-- Form nhập thủ công - dùng khi mã cần cấu hình cảnh báo hoàn toàn KHÔNG có trong dữ liệu tải về
+                 (kế toán chưa từng nhập hoặc ẩn hẳn khỏi Sheet), nên không thể tìm ra để chọn như bình thường.
+                 Sau khi xác nhận, mã này coi như 1 "dòng ảo" luôn (tồn = 0) cho tới khi thật sự xuất hiện trong Sheet. -->
+            <div id="manualThresholdForm" class="threshold-add-row" style="display:none; margin-top:10px; padding:14px; background:#f8fafc; border-radius:8px; border:1px dashed var(--border-color);">
+                <input type="text" id="manualId" class="form-control" placeholder="Mã vật tư (bắt buộc - tự đặt tạm cũng được, VD: TAM-THEP60)" style="flex:1 1 220px;">
+                <input type="text" id="manualName" class="form-control" placeholder="Tên vật tư (bắt buộc)" style="flex:2 1 220px;">
+                <select id="manualSheet" class="form-control" style="flex:1 1 160px;"></select>
+                <input type="text" id="manualUnit" class="form-control" placeholder="Đvt (VD: Kg, Cái...)" style="flex:1 1 120px;">
+                <button type="button" class="btn-export" onclick="confirmManualThresholdEntry()">Xác nhận mã này</button>
+            </div>
+
+            <p id="manualThresholdHint" style="display:none; color:#64748b; font-size:12.5px; margin-top:8px;">
+                ✅ Đã chọn mã thủ công - anh nhập ngưỡng cảnh báo vào ô phía trên rồi bấm "+ Thêm" như bình thường.
+            </p>
+
+            <div style="display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;">
+                <label for="thresholdCategoryFilterSelect" style="font-size:13px; color:#64748b; font-weight:600;">Lọc theo danh mục:</label>
+                <select id="thresholdCategoryFilterSelect" class="form-control" style="max-width:220px;" onchange="thresholdCategoryFilter = this.value; renderThresholdConfigTable();">
+                    <option value="">Tất cả danh mục</option>
+                </select>
+            </div>
+
+            <div class="table-responsive" style="margin-top:12px;">
                 <table>
                     <thead>
                         <tr>
-                            <th class="text-left">Mã Vật Tư</th>
-                            <th class="text-left">Tên Vật Tư</th>
+                            <th class="text-left sortable" onclick="toggleThresholdSortColumn('id')">Mã Vật Tư <span id="thresholdSortArrow_id" class="sort-arrow sort-arrow-inactive">↕</span></th>
+                            <th class="text-left sortable" onclick="toggleThresholdSortColumn('name')">Tên Vật Tư <span id="thresholdSortArrow_name" class="sort-arrow sort-arrow-inactive">↕</span></th>
+                            <th class="text-left">Danh Mục</th>
                             <th>Ngưỡng Cảnh Báo</th>
                             <th>Xóa</th>
                         </tr>
@@ -353,6 +396,7 @@ const DEMO_DATA = {
 };
 
 let flatInventoryList = [];   // Danh sách gộp phẳng toàn bộ vật tư, mỗi item có thêm field "sheet" (tên danh mục)
+let knownCategories = [];     // Danh sách tên danh mục thật (không tính "Giá TB") - dùng cho dropdown khi nhập thủ công mã mới
 
 // Sheet "Giá TB" có cấu trúc khác các sheet tồn kho (không có "Tồn cuối", thay bằng "Giá TB") -
 // nên cần nhận diện riêng để đổi cách hiển thị bảng cho đúng, giống hệt lúc mở trên Google Sheet.
@@ -384,6 +428,12 @@ let currentCategory = DEFAULT_CATEGORY;
 // Trạng thái sắp xếp bảng - giống hàm Sort trong Excel: bấm vào tiêu đề cột để sắp xếp.
 // column: 'name' (Tên Vật Tư) hoặc 'value' (Tồn Kho ở tab thường / Giá TB ở tab Giá TB); null = không sắp xếp, giữ thứ tự gốc.
 let sortState = { column: null, direction: 'asc' };
+
+// Trạng thái sort + lọc danh mục RIÊNG cho bảng "Cấu Hình Cảnh Báo Tồn Kho" - tách biệt với sortState của
+// bảng tồn kho chính, vì đây là 2 bảng độc lập, không nên ảnh hưởng lẫn nhau.
+// column: 'id' (Mã Vật Tư) hoặc 'name' (Tên Vật Tư).
+let thresholdSortState = { column: null, direction: 'asc' };
+let thresholdCategoryFilter = ''; // rỗng = xem tất cả danh mục
 
 // Lưu lại đúng dữ liệu (đã lọc + đã sort) đang hiển thị trên bảng - dùng khi bấm "Xuất Excel"
 let lastRenderedData = [];
@@ -451,6 +501,45 @@ function toggleMovementColumns() {
 function rebuildThresholdMap() {
     thresholdMap = {};
     thresholdConfig.forEach(t => { thresholdMap[t.id] = t.threshold; });
+
+    syncGhostRows();
+
+    // Cập nhật lại ngay số liệu thống kê (SỐ MÃ ĐANG HIỂN THỊ / SẮP HẾT / HẾT HÀNG) và bảng tồn kho -
+    // để anh thấy hiệu lực NGAY sau khi Thêm/Xóa/Sửa ngưỡng, không cần bấm "Làm mới dữ liệu" mới thấy.
+    // An toàn gọi ở đây kể cả lúc trang mới tải xong (DOM đã sẵn sàng từ trước khi processData() chạy).
+    if (document.getElementById('inventory-table-body')) {
+        renderTable();
+    }
+}
+
+// Đồng bộ "dòng ảo" vào flatInventoryList mỗi khi cấu hình cảnh báo thay đổi - dùng cho mã đã cấu hình
+// cảnh báo nhưng bị kế toán ẩn/xóa khỏi Sheet gốc (hoặc mã nhập thủ công chưa từng có trong Sheet).
+// Hàm này an toàn gọi lại nhiều lần: luôn dọn sạch dòng ảo cũ trước rồi mới dựng lại từ đầu theo đúng
+// thresholdConfig + dữ liệu thật hiện tại, tránh bị sót hoặc bị nhân đôi qua nhiều lần gọi.
+function syncGhostRows() {
+    flatInventoryList = flatInventoryList.filter(item => !item.isGhost);
+
+    thresholdConfig.forEach(t => {
+        // QUAN TRỌNG: loại trừ sheet "Giá TB" khỏi việc kiểm tra "đã tồn tại thật" - vì MỌI mã vật tư đều có
+        // 1 dòng giá bên sheet Giá TB (dù có hết hàng ở danh mục thật hay không), nên nếu không loại trừ,
+        // hệ thống sẽ luôn nghĩ mã đó "đã có thật" (thấy ở Giá TB) và không bao giờ tạo dòng ảo, dù thực tế
+        // mã đó đang ẩn/hết hàng ở đúng danh mục cần cảnh báo (VD Thép Tấm).
+        const stillExists = flatInventoryList.some(i => String(i.id) === String(t.id) && !isPriceSheetName(i.sheet));
+        if (stillExists) return;
+        if (!t.sheet) return; // chưa rõ danh mục (mã cấu hình từ trước khi có bản cập nhật này) -> không đủ dữ liệu để xếp vào tab nào, đành bỏ qua
+        flatInventoryList.push({
+            sheet: t.sheet,
+            id: t.id,
+            name: t.name,
+            unit: t.unit || '',
+            stock: 0,
+            tonDau: 0,
+            nhap: 0,
+            xuat: 0,
+            raw: {},
+            isGhost: true // đánh dấu đây là dòng suy ra từ cấu hình cảnh báo, không phải dữ liệu thật đọc từ Sheet lúc này
+        });
+    });
 }
 
 function getStockStatus(item) {
@@ -582,17 +671,36 @@ function processData(data) {
         });
     });
 
-    // Nạp cấu hình cảnh báo tồn kho (nếu Apps Script có trả về) - ghép thêm tên vật tư để hiển thị đẹp trong tab cấu hình
+    // Nạp cấu hình cảnh báo tồn kho (nếu Apps Script có trả về) - ghép thêm tên vật tư để hiển thị đẹp trong tab cấu hình.
+    // Hỗ trợ cả 2 định dạng: cũ (chỉ là số ngưỡng) và mới (object có kèm tên/danh mục/đvt đã lưu sẵn từ lúc thêm mã) -
+    // để không vỡ nếu Apps Script bên server chưa kịp cập nhật theo định dạng mới.
     const thresholdsFromServer = data._thresholds || {};
     thresholdConfig = Object.keys(thresholdsFromServer).map(id => {
-        const matchedItem = flatInventoryList.find(i => String(i.id) === String(id));
+        const raw = thresholdsFromServer[id];
+        const isObjectFormat = raw !== null && typeof raw === 'object';
+        const threshold = Number(isObjectFormat ? raw.threshold : raw) || 0;
+        // QUAN TRỌNG: loại trừ sheet "Giá TB" khỏi việc tìm "dữ liệu thật" - lý do y hệt syncGhostRows() bên dưới:
+        // mọi mã đều có 1 dòng giá bên Giá TB, nếu không loại trừ thì mã đang hết hàng/ẩn ở danh mục thật
+        // (VD Thép Tấm) sẽ luôn bị "tìm thấy" nhầm qua dòng Giá TB, khiến danh mục anh đã cấu hình bị Giá TB
+        // ghi đè lại mỗi lần tải dữ liệu, dù anh không hề đổi gì.
+        const matchedItem = flatInventoryList.find(i => String(i.id) === String(id) && !isPriceSheetName(i.sheet));
+
+        // Ưu tiên lấy tên/danh mục/đvt từ dữ liệu tồn kho hiện tại (luôn là dữ liệu mới nhất) -
+        // chỉ dùng lại thông tin đã lưu trong cấu hình khi mã đó KHÔNG còn thấy trong tồn kho nữa
+        // (trường hợp kế toán đã ẩn dòng = 0 khỏi Sheet gốc).
         return {
             id: id,
-            name: matchedItem ? matchedItem.name : '(không thấy mã này trong tồn kho hiện tại)',
-            threshold: Number(thresholdsFromServer[id]) || 0
+            name: matchedItem ? matchedItem.name : (isObjectFormat && raw.name) || '(mã đã ẩn khỏi bảng tồn kho - có thể do hết hàng)',
+            sheet: matchedItem ? matchedItem.sheet : (isObjectFormat ? raw.sheet : null) || null,
+            unit: matchedItem ? matchedItem.unit : (isObjectFormat ? raw.unit : '') || '',
+            threshold: threshold
         };
     });
-    rebuildThresholdMap();
+    rebuildThresholdMap(); // hàm này giờ tự gọi kèm syncGhostRows() để dựng "dòng ảo" luôn, không cần lặp code ở đây nữa
+
+    // Lưu lại danh sách danh mục thật (loại "Giá TB" ra - sheet đó không có khái niệm tồn kho) để dùng
+    // cho dropdown "Danh mục" khi anh cần nhập thủ công 1 mã hoàn toàn chưa có trong dữ liệu tải về.
+    knownCategories = realSheetNames.filter(name => !isPriceSheetName(name));
 
     renderCategoryTabs(realSheetNames);
 }
@@ -637,12 +745,6 @@ function filterCategory(category, btnElement) {
     document.querySelectorAll('.nav-tab-btn').forEach(b => b.classList.remove('active'));
     if (btnElement) btnElement.classList.add('active');
 
-    document.getElementById('panel-heading').innerText = category === 'ALL'
-        ? '📦 Tồn Kho Nguyên Vật Liệu (Tất cả)'
-        : isPriceSheetName(category)
-            ? `💰 Danh mục: ${category}`
-            : `📦 Danh mục: ${category}`;
-
     renderTagFilters();
     renderTable();
 }
@@ -663,7 +765,13 @@ const TAG_CONFIG = {
     'THÉP TẤM': {
         groups: [
             { key: 'grade', label: 'Mác thép:', type: 'auto-grade' },
-            { key: 'thickness', label: 'Dày (mm):', type: 'auto-thickness' }
+            {
+                key: 'thickness', label: 'Dày (mm):', type: 'auto-thickness',
+                // Các chiều dày anh yêu cầu luôn hiện hashtag, kể cả khi mã tương ứng đang tạm thời không thấy
+                // trong dữ liệu hiện tại (VD do kế toán ẩn dòng tồn = 0) - hashtag sẽ mờ đi/không bấm được
+                // cho tới khi có mã khớp xuất hiện lại (xem thêm cơ chế "dòng ảo" cho mã đã cấu hình cảnh báo).
+                extraValues: ['30', '35', '36', '40', '45', '50', '55', '60', '70', '80', '90', '100']
+            }
         ]
     },
     'CAO SU': {
@@ -755,7 +863,9 @@ function extractAutoValues(items, type) {
     let entries = Object.entries(counts).filter(([, count]) => count >= minCount);
 
     if (type === 'auto-thickness') {
-        entries = entries.sort((a, b) => Number(a[0]) - Number(b[0])).slice(0, 12);
+        // Không cắt bớt (trước đây .slice(0,12) khiến các chiều dày lớn hơn 25 không bao giờ lọt vào danh sách
+        // dù thực tế có mã khớp) - số chiều dày thực tế của thép tấm không nhiều nên không cần giới hạn.
+        entries = entries.sort((a, b) => Number(a[0]) - Number(b[0]));
     } else if (type === 'auto-bolt-strength') {
         entries = entries.sort((a, b) => Number(a[0]) - Number(b[0])).slice(0, 8);
     } else if (type === 'auto-bolt-diameter') {
@@ -803,7 +913,18 @@ function getGroupValues(items, group) {
         // Chỉ hiện hashtag nào thực sự có ít nhất 1 mã khớp - tránh hiện hashtag chết, không lọc ra gì
         return group.values.filter(v => items.some(item => itemMatchesGroupValue(item, group, v)));
     }
-    return extractAutoValues(items, group.type);
+
+    let values = extractAutoValues(items, group.type);
+
+    // Một số group có thêm "extraValues" - các giá trị anh muốn luôn thấy hashtag, kể cả khi hiện tại
+    // chưa có mã nào khớp trong dữ liệu đang hiển thị (VD mã đó đang bị kế toán ẩn dòng vì tồn = 0).
+    // Hashtag vẫn hiện nhưng sẽ bị làm mờ/không bấm được (xem buildTagPill) cho tới khi có mã khớp thật.
+    if (group.extraValues && group.extraValues.length) {
+        const merged = new Set([...values, ...group.extraValues]);
+        values = Array.from(merged).sort((a, b) => Number(a) - Number(b));
+    }
+
+    return values;
 }
 
 let activeTagsByGroup = {}; // { [groupKey]: giá trị đang chọn }, reset mỗi khi đổi tab danh mục
@@ -906,21 +1027,27 @@ function renderTableHeader(isPriceView) {
         ? `<th class="text-right">Tồn Đầu</th><th class="text-right">Nhập</th><th class="text-right">Xuất</th>`
         : '';
 
+    // Cột "Danh Mục" chỉ CÓ Ý NGHĨA khi xem Dashboard Tổng (mỗi dòng có thể thuộc danh mục khác nhau) -
+    // khi đang xem đúng 1 danh mục cụ thể (VD tab THÉP TẤM), mọi dòng đều cùng 1 danh mục với tiêu đề panel
+    // phía trên rồi, hiện lại cột này là thừa, nhất là trên điện thoại màn hình hẹp.
+    const showCategoryColumn = currentCategory === 'ALL';
+    const categoryHeaderCell = showCategoryColumn ? `<th class="text-left">Danh Mục</th>` : '';
+
     thead.innerHTML = isPriceView
         ? `<tr>
             <th>Stt</th>
-            <th class="text-left">Mã Vật Tư</th>
+            <th class="text-left" style="width:110px; max-width:110px;">Mã Vật Tư</th>
             <th class="text-left sortable" onclick="toggleSortColumn('name')">Tên Vật Tư ${getSortIndicatorHtml('name')}</th>
             <th>ĐVT</th>
             <th class="text-right sortable" onclick="toggleSortColumn('value')">Giá TB ${getSortIndicatorHtml('value')}</th>
         </tr>`
         : `<tr>
-            <th class="text-left">Mã Vật Tư</th>
+            <th class="text-left" style="width:110px; max-width:110px;">Mã Vật Tư</th>
             <th class="text-left sortable" onclick="toggleSortColumn('name')">Tên Vật Tư ${getSortIndicatorHtml('name')}</th>
             <th>ĐVT</th>
             ${movementHeaderCells}
             <th class="text-right sortable" onclick="toggleSortColumn('value')">Tồn Kho ${getSortIndicatorHtml('value')}</th>
-            <th class="text-left">Danh Mục</th>
+            ${categoryHeaderCell}
         </tr>`;
 }
 
@@ -936,7 +1063,12 @@ function renderTable() {
         const id = String(item.id == null ? '' : item.id).toLowerCase();
         const name = String(item.name == null ? '' : item.name).toLowerCase();
         const matchesSearch = id.includes(searchTerm) || name.includes(searchTerm);
-        const matchesCategory = currentCategory === 'ALL' || item.sheet === currentCategory;
+        // Dashboard Tổng (ALL) gộp mọi danh mục tồn kho thật lại - nhưng Giá TB không phải tồn kho, chỉ là
+        // bảng giá tham khảo (không có cột Tồn cuối thật, mặc định về 0 khi đọc), nên phải loại hẳn ra khỏi
+        // Dashboard Tổng, tránh nó bị tính nhầm vào "Hết Hàng" dù không hề liên quan gì đến tồn kho.
+        const matchesCategory = currentCategory === 'ALL'
+            ? !isPriceSheetName(item.sheet)
+            : item.sheet === currentCategory;
         const matchesTag = itemMatchesActiveTag(item);
         return matchesSearch && matchesCategory && matchesTag;
     });
@@ -968,7 +1100,8 @@ function renderTable() {
     }
 
     const showMovement = showMovementColumns && !isPriceView;
-    const totalColumns = isPriceView ? 5 : (showMovement ? 8 : 5);
+    const showCategoryColumn = currentCategory === 'ALL';
+    const totalColumns = isPriceView ? 5 : (4 + (showMovement ? 3 : 0) + (showCategoryColumn ? 1 : 0));
 
     if (filteredData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="${totalColumns}" style="color:#94a3b8; padding:20px;">Không tìm thấy vật tư phù hợp.</td></tr>`;
@@ -1009,14 +1142,20 @@ function renderTable() {
                    <td class="text-right" style="color:var(--vh-green);">${item.nhap.toLocaleString('en-US')}</td>
                    <td class="text-right" style="color:var(--danger);">${item.xuat.toLocaleString('en-US')}</td>`
                 : '';
+            // Dòng ảo (mã đã cấu hình cảnh báo nhưng kế toán ẩn khỏi Sheet vì hết hàng) - thêm badge nhỏ để
+            // anh phân biệt đây không phải dòng đọc trực tiếp từ Sheet lúc này, tránh nhầm là lỗi dữ liệu.
+            const nameCell = item.isGhost
+                ? `${escapeHtml(item.name)} <span class="badge badge-danger" style="margin-left:6px;">Ẩn khỏi DS kế toán</span>`
+                : escapeHtml(item.name);
+            const categoryCell = showCategoryColumn ? `<td class="text-left"><span class="badge badge-info">${escapeHtml(item.sheet)}</span></td>` : '';
             return `
             <tr>
                 <td class="text-left font-bold">${escapeHtml(item.id)}</td>
-                <td class="text-left">${escapeHtml(item.name)}</td>
+                <td class="text-left">${nameCell}</td>
                 <td>${escapeHtml(item.unit)}</td>
                 ${movementCells}
                 <td class="text-right" style="font-weight:bold; font-size:15px; color:${stockColor};">${item.stock.toLocaleString('en-US')}</td>
-                <td class="text-left"><span class="badge badge-info">${escapeHtml(item.sheet)}</span></td>
+                ${categoryCell}
             </tr>
         `;
         });
@@ -1163,14 +1302,26 @@ function renderThresholdSuggestions() {
         return;
     }
 
+    // Loại bỏ sheet "Giá TB" khỏi kết quả gợi ý - đây chỉ là bảng giá tham khảo, không có khái niệm tồn kho,
+    // nên không có ý nghĩa để cấu hình cảnh báo. Quan trọng hơn: mỗi mã vật tư đều có 1 dòng lặp lại bên
+    // sheet Giá TB (trùng id/tên với dòng bên sheet danh mục thật) - nếu không loại ra, anh rất dễ bấm nhầm
+    // vào dòng Giá TB, khiến mã bị gắn sai danh mục và "biến mất" khỏi cảnh báo tồn kho của danh mục thật.
     const matches = flatInventoryList.filter(item => {
+        if (isPriceSheetName(item.sheet)) return false;
         const id = String(item.id || '').toLowerCase();
         const name = String(item.name || '').toLowerCase();
         return id.includes(term) || name.includes(term);
     }).slice(0, 8);
 
     if (matches.length === 0) {
-        box.innerHTML = '<div class="threshold-suggestion-empty">Không tìm thấy mã vật tư phù hợp</div>';
+        // Ô gợi ý này nổi lên trên (position:absolute) nên nó đang đè mất dòng link "Nhập thủ công" nằm phía dưới -
+        // đưa thẳng nút thủ công vào TRONG ô gợi ý luôn để anh luôn bấm được, không bị che khuất.
+        box.innerHTML = `
+            <div class="threshold-suggestion-empty">Không tìm thấy mã vật tư phù hợp</div>
+            <div class="threshold-suggestion-item" style="color:var(--vh-blue); font-weight:600;" onclick="openManualFormFromSuggestion()">
+                + Không có trong danh sách - Nhập thủ công mã này
+            </div>
+        `;
         box.style.display = 'block';
         return;
     }
@@ -1178,18 +1329,97 @@ function renderThresholdSuggestions() {
     box.innerHTML = matches.map(item => {
         const safeId = escapeHtml(item.id).replace(/"/g, '&quot;');
         const safeName = escapeHtml(item.name).replace(/"/g, '&quot;');
-        return `<div class="threshold-suggestion-item" onclick="selectThresholdItem('${safeId.replace(/'/g, "\\'")}', '${safeName.replace(/'/g, "\\'")}')">
-            <strong>${safeId}</strong> - ${safeName}
+        const safeSheet = escapeHtml(item.sheet).replace(/"/g, '&quot;');
+        const safeUnit = escapeHtml(item.unit).replace(/"/g, '&quot;');
+        // Hiện rõ danh mục ngay trong gợi ý - phòng trường hợp còn mã trùng tên/mã ở nơi khác,
+        // anh vẫn nhìn thấy rõ đang chọn đúng danh mục nào trước khi bấm.
+        return `<div class="threshold-suggestion-item" onclick="selectThresholdItem('${safeId.replace(/'/g, "\\'")}', '${safeName.replace(/'/g, "\\'")}', '${safeSheet.replace(/'/g, "\\'")}', '${safeUnit.replace(/'/g, "\\'")}')">
+            <strong>${safeId}</strong> - ${safeName} <span style="color:#94a3b8;">(${safeSheet})</span>
         </div>`;
     }).join('');
     box.style.display = 'block';
 }
 
-function selectThresholdItem(id, name) {
-    pendingThresholdItem = { id: id, name: name };
+// Lưu kèm danh mục (sheet) + đvt của mã lúc còn thấy trong tồn kho - để sau này nếu kế toán ẩn dòng
+// (tồn = 0) khỏi Sheet gốc, app vẫn biết mã này thuộc danh mục nào, đvt gì để dựng lại "dòng ảo" hiển thị đúng chỗ.
+function selectThresholdItem(id, name, sheet, unit) {
+    pendingThresholdItem = { id: id, name: name, sheet: sheet, unit: unit };
     document.getElementById('thresholdSearchInput').value = `${id} - ${name}`;
     document.getElementById('thresholdSuggestions').innerHTML = '';
     document.getElementById('thresholdSuggestions').style.display = 'none';
+    // Đang gõ tìm bình thường thì ẩn form thủ công đi (nếu lỡ đang mở) để khỏi rối giao diện
+    hideManualThresholdForm();
+}
+
+// ---- NHẬP THỦ CÔNG MÃ VẬT TƯ CHƯA CÓ TRONG DỮ LIỆU ----
+// Dùng khi mã cần cấu hình cảnh báo là mã QUAN TRỌNG nhưng tồn = 0 và kế toán chưa từng nhập / đã ẩn hẳn
+// khỏi Sheet, nên không thể tìm ra để chọn theo cách bình thường (renderThresholdSuggestions chỉ tìm được
+// trong flatInventoryList - dữ liệu thật đã tải về). Sau khi xác nhận, mã này được coi như 1 "dòng ảo"
+// (tồn = 0) ngay từ bây giờ, tới khi nào kế toán nhập mã đó vào Sheet thật thì dữ liệu thật sẽ ghi đè lên.
+// Mở form nhập thủ công ngay từ trong ô gợi ý (khi bấm "+ Không có trong danh sách...") - đóng hẳn dropdown
+// gợi ý trước, vì nó đang nổi đè lên (position:absolute) khiến form thủ công phía dưới bị che mất nếu không đóng lại.
+function openManualFormFromSuggestion() {
+    document.getElementById('thresholdSuggestions').innerHTML = '';
+    document.getElementById('thresholdSuggestions').style.display = 'none';
+    document.getElementById('manualThresholdForm').style.display = 'none'; // đảm bảo đang đóng trước khi gọi toggle mở lại
+    toggleManualThresholdForm();
+}
+
+function toggleManualThresholdForm() {
+    const form = document.getElementById('manualThresholdForm');
+    const isHidden = form.style.display === 'none';
+    if (isHidden) {
+        // Nạp danh sách danh mục mỗi lần mở form - đề phòng dữ liệu vừa được làm mới nên danh mục có thể đổi
+        const select = document.getElementById('manualSheet');
+        select.innerHTML = knownCategories.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+        form.style.display = 'flex';
+        document.getElementById('manualId').value = document.getElementById('thresholdSearchInput').value.trim();
+        document.getElementById('thresholdSuggestions').innerHTML = '';
+        document.getElementById('thresholdSuggestions').style.display = 'none';
+    } else {
+        hideManualThresholdForm();
+    }
+}
+
+function hideManualThresholdForm() {
+    document.getElementById('manualThresholdForm').style.display = 'none';
+    document.getElementById('manualThresholdHint').style.display = 'none';
+}
+
+// Sinh 1 mã tạm duy nhất từ tên vật tư khi anh không nhập mã (chưa biết mã thật hoặc chưa muốn nghĩ mã) -
+// tiền tố "TAM_" để dễ nhận ra đây KHÔNG phải mã thật bên kế toán, tránh trùng vô tình với mã có sẵn.
+// Hậu quả cần lưu ý: vì mã tạm không khớp với mã thật, nên khi kế toán sau này nhập mã thật vào Sheet,
+// "dòng ảo" (dùng mã tạm) sẽ KHÔNG tự động được thay bằng dòng thật - anh cần vào xóa mã tạm và thêm lại
+// đúng mã thật 1 lần để 2 bên khớp nhau (xem thêm giải thích ở nameCell/isGhost).
+function confirmManualThresholdEntry() {
+    const id = document.getElementById('manualId').value.trim();
+    const name = document.getElementById('manualName').value.trim();
+    const sheet = document.getElementById('manualSheet').value;
+    const unit = document.getElementById('manualUnit').value.trim();
+
+    // Bắt buộc phải có mã - không để hệ thống tự sinh mã ngẫu nhiên (dễ quên, dễ tạo trùng lặp âm thầm
+    // nếu lỡ bấm xác nhận nhiều lần). Nếu chưa biết mã thật bên kế toán, anh tự đặt 1 mã tạm dễ nhớ
+    // (VD: "TAM-THEP60") - miễn là chính anh chủ động biết và nhớ được mã đó là gì.
+    if (!id || !name) {
+        alert('Anh nhập đủ Mã vật tư và Tên vật tư trước khi xác nhận nhé. Nếu chưa biết mã thật, anh tự đặt 1 mã tạm dễ nhớ (VD: TAM-THEP60) để sau này còn tìm lại được.');
+        return;
+    }
+    if (!sheet) {
+        alert('Chưa có danh mục nào để chọn - anh Làm mới dữ liệu 1 lần cho có dữ liệu danh mục rồi thử lại nhé.');
+        return;
+    }
+
+    // Cảnh báo nhẹ nếu mã này thực ra ĐÃ có sẵn trong dữ liệu thật - tránh trường hợp anh gõ nhầm mã đã tồn tại,
+    // vì nếu vậy nên dùng ô tìm kiếm phía trên để chọn đúng dòng thật (có đầy đủ tồn kho hiện tại) thay vì nhập thủ công.
+    const alreadyReal = flatInventoryList.some(i => String(i.id).toLowerCase() === id.toLowerCase() && !isPriceSheetName(i.sheet));
+    if (alreadyReal && !confirm(`Mã "${id}" hình như đã có sẵn trong dữ liệu tồn kho thật. Anh có chắc muốn nhập thủ công đè lên không? (Nên dùng ô tìm kiếm phía trên để chọn đúng dòng thật thay vì bấm OK ở đây)`)) {
+        return;
+    }
+
+    pendingThresholdItem = { id: id, name: name, sheet: sheet, unit: unit };
+    document.getElementById('thresholdSearchInput').value = `${id} - ${name} (nhập thủ công)`;
+    hideManualThresholdForm();
+    document.getElementById('manualThresholdHint').style.display = 'block';
 }
 
 function addThresholdItem() {
@@ -1207,40 +1437,135 @@ function addThresholdItem() {
     const existing = thresholdConfig.find(t => t.id === pendingThresholdItem.id);
     if (existing) {
         existing.threshold = thresholdVal; // đã có rồi thì cập nhật lại ngưỡng mới
+        existing.name = pendingThresholdItem.name; // cập nhật lại tên/danh mục/đvt mới nhất luôn, phòng khi trước đó lưu bị thiếu
+        existing.sheet = pendingThresholdItem.sheet;
+        existing.unit = pendingThresholdItem.unit;
+        existing.markedForDelete = false; // lỡ bấm Xóa nhầm trước đó thì thêm lại là tự hủy đánh dấu luôn
     } else {
-        thresholdConfig.push({ id: pendingThresholdItem.id, name: pendingThresholdItem.name, threshold: thresholdVal });
+        thresholdConfig.push({
+            id: pendingThresholdItem.id,
+            name: pendingThresholdItem.name,
+            sheet: pendingThresholdItem.sheet,
+            unit: pendingThresholdItem.unit,
+            threshold: thresholdVal
+        });
     }
 
     document.getElementById('thresholdSearchInput').value = '';
     document.getElementById('thresholdValueInput').value = '';
     pendingThresholdItem = null;
+    hideManualThresholdForm();
 
     rebuildThresholdMap();
     renderThresholdConfigTable();
 }
 
-function removeThresholdItem(id) {
-    thresholdConfig = thresholdConfig.filter(t => t.id !== id);
-    rebuildThresholdMap();
+// Bấm "Xóa" chỉ ĐÁNH DẤU dòng đó là "chờ xóa" (tô cam) chứ chưa xóa thật ngay - giống hệt cách "Thêm" chỉ
+// nằm trên web cho tới khi bấm "Lưu Lên Google Sheet". Làm vậy để anh có thể xem lại/đổi ý (bấm lại để huỷ đánh dấu)
+// trước khi xóa thật, và để hành vi giữa "Xóa" và "Thêm" nhất quán - đều cần bấm Lưu mới ghi thật lên Sheet.
+function toggleMarkForDelete(id) {
+    const target = thresholdConfig.find(t => t.id === id);
+    if (target) target.markedForDelete = !target.markedForDelete;
     renderThresholdConfigTable();
+}
+
+function toggleThresholdSortColumn(column) {
+    if (thresholdSortState.column === column) {
+        thresholdSortState.direction = thresholdSortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        thresholdSortState.column = column;
+        thresholdSortState.direction = 'asc';
+    }
+    renderThresholdConfigTable();
+}
+
+function updateThresholdSortArrows() {
+    ['id', 'name'].forEach(col => {
+        const el = document.getElementById('thresholdSortArrow_' + col);
+        if (!el) return;
+        if (thresholdSortState.column !== col) {
+            el.textContent = '↕';
+            el.className = 'sort-arrow sort-arrow-inactive';
+        } else {
+            el.textContent = thresholdSortState.direction === 'asc' ? '▲' : '▼';
+            el.className = 'sort-arrow sort-arrow-active';
+        }
+    });
+}
+
+// Dựng lại dropdown lọc danh mục theo đúng các danh mục THỰC TẾ đang có trong thresholdConfig (không phải
+// toàn bộ knownCategories) - để không hiện danh mục nào chẳng có mã nào được cấu hình cảnh báo cả, đỡ rối.
+function renderThresholdCategoryFilterOptions() {
+    const select = document.getElementById('thresholdCategoryFilterSelect');
+    if (!select) return;
+    const categoriesInUse = Array.from(new Set(thresholdConfig.map(t => t.sheet).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'vi'));
+
+    // Nếu danh mục đang được chọn lọc không còn mã nào nữa (VD vừa xóa hết mã của danh mục đó) thì tự về "Tất cả"
+    if (thresholdCategoryFilter && !categoriesInUse.includes(thresholdCategoryFilter)) {
+        thresholdCategoryFilter = '';
+    }
+
+    select.innerHTML = '<option value="">Tất cả danh mục</option>' +
+        categoriesInUse.map(name => `<option value="${escapeHtml(name)}"${name === thresholdCategoryFilter ? ' selected' : ''}>${escapeHtml(name)}</option>`).join('');
 }
 
 function renderThresholdConfigTable() {
     const tbody = document.getElementById('thresholdConfigTableBody');
 
-    if (thresholdConfig.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="4" style="color:#94a3b8; padding:16px;">Chưa có mã vật tư nào được cấu hình cảnh báo. Anh tìm và thêm mã ở ô phía trên nhé.</td></tr>`;
+    renderThresholdCategoryFilterOptions();
+    updateThresholdSortArrows();
+
+    let list = thresholdCategoryFilter
+        ? thresholdConfig.filter(t => t.sheet === thresholdCategoryFilter)
+        : thresholdConfig.slice();
+
+    if (thresholdSortState.column) {
+        const dir = thresholdSortState.direction === 'asc' ? 1 : -1;
+        const field = thresholdSortState.column; // 'id' hoặc 'name'
+        list.sort((a, b) => String(a[field] || '').localeCompare(String(b[field] || ''), 'vi', { numeric: true }) * dir);
+    }
+
+    if (list.length === 0) {
+        const emptyMsg = thresholdConfig.length === 0
+            ? 'Chưa có mã vật tư nào được cấu hình cảnh báo. Anh tìm và thêm mã ở ô phía trên nhé.'
+            : `Không có mã nào thuộc danh mục "${escapeHtml(thresholdCategoryFilter)}" trong danh sách cảnh báo.`;
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8; padding:16px;">${emptyMsg}</td></tr>`;
         return;
     }
 
-    tbody.innerHTML = thresholdConfig.map(t => `
-        <tr>
+    tbody.innerHTML = list.map(t => {
+        // Dòng đang được đánh dấu chờ xóa -> tô nền cam để dễ nhận biết, và đổi nút "Xóa" thành "Hoàn tác"
+        const rowStyle = t.markedForDelete ? ' style="background:#fff3cd;"' : '';
+        const btnLabel = t.markedForDelete ? '↩️ Hoàn tác' : 'Xóa';
+        const safeIdAttr = String(t.id).replace(/'/g, "\\'");
+        return `
+        <tr${rowStyle}>
             <td class="text-left font-bold">${escapeHtml(t.id)}</td>
             <td class="text-left">${escapeHtml(t.name)}</td>
-            <td>${escapeHtml(t.threshold)}</td>
-            <td><button type="button" class="btn-refresh" onclick="removeThresholdItem(${JSON.stringify(t.id)})">Xóa</button></td>
+            <td class="text-left">${t.sheet ? `<span class="badge badge-info">${escapeHtml(t.sheet)}</span>` : '<span style="color:#cbd5e1;">-</span>'}</td>
+            <td>
+                <input type="number" min="0" class="form-control threshold-inline-input"
+                    value="${escapeHtml(t.threshold)}"
+                    onchange="updateThresholdValue('${safeIdAttr}', this.value)">
+            </td>
+            <td><button type="button" class="btn-refresh" onclick="toggleMarkForDelete('${safeIdAttr}')">${btnLabel}</button></td>
         </tr>
-    `).join('');
+    `;
+    }).join('');
+}
+
+// Cho phép sửa thẳng số ngưỡng ngay trong bảng cấu hình - khỏi phải tìm/chọn lại mã từ ô tìm kiếm phía trên
+// chỉ để đổi 1 con số. onchange chỉ chạy khi rời khỏi ô (blur/Enter) nên không bị mất focus lúc đang gõ dở.
+function updateThresholdValue(id, rawValue) {
+    const val = parseFloat(rawValue);
+    if (isNaN(val) || val < 0) {
+        alert('Ngưỡng cảnh báo phải là số >= 0 nhé anh.');
+        renderThresholdConfigTable(); // nhập sai thì trả ô input về giá trị cũ, tránh lưu nhầm giá trị rác
+        return;
+    }
+    const target = thresholdConfig.find(t => t.id === id);
+    if (target) target.threshold = val;
+    rebuildThresholdMap();
 }
 
 // ---- PANEL GỢI Ý ĐẶT HÀNG LẠI ----
@@ -1253,7 +1578,10 @@ let lastReorderList = []; // lưu lại danh sách đang hiển thị để dùn
 function getReorderList() {
     return thresholdConfig
         .map(t => {
-            const item = flatInventoryList.find(i => String(i.id) === String(t.id));
+            // Loại trừ sheet "Giá TB" - lý do y hệt processData/syncGhostRows: mọi mã đều có 1 dòng giá bên
+            // Giá TB, nếu không loại trừ sẽ vô tình khớp nhầm dòng đó (không có Tồn kho thật) thay vì đúng
+            // dòng thuộc danh mục thật hoặc dòng ảo đã tạo cho danh mục đó.
+            const item = flatInventoryList.find(i => String(i.id) === String(t.id) && !isPriceSheetName(i.sheet));
             if (!item) return null; // mã đã cấu hình nhưng không còn thấy trong tồn kho hiện tại (VD đổi mã/xóa mã bên Sheet)
 
             const status = getStockStatus(item);
@@ -1348,12 +1676,18 @@ function exportReorderList() {
     XLSX.writeFile(workbook, `CanDatHangLai_${timestamp}.xlsx`);
 }
 
-// Lưu toàn bộ danh sách cấu hình lên Google Sheet qua Apps Script (doPost) - ghi đè toàn bộ danh sách cũ bằng danh sách hiện tại
+// Lưu toàn bộ danh sách cấu hình lên Google Sheet qua Apps Script (doPost) - ghi đè toàn bộ danh sách cũ bằng danh sách hiện tại.
+// Đồng thời đây cũng là lúc XÓA THẬT các dòng đang được đánh dấu cam (chờ xóa) - loại hẳn khỏi thresholdConfig
+// trước khi gửi đi, để cả web lẫn Google Sheet đồng bộ đúng lúc này.
 function saveThresholdConfig() {
     const btn = document.getElementById('btn-save-threshold');
     const status = document.getElementById('thresholdSaveStatus');
     btn.disabled = true;
     status.innerText = 'Đang lưu lên Google Sheet...';
+
+    thresholdConfig = thresholdConfig.filter(t => !t.markedForDelete);
+    rebuildThresholdMap();
+    renderThresholdConfigTable();
 
     // Dùng Content-Type: text/plain để trình duyệt không gửi preflight OPTIONS (Apps Script không xử lý được request đó),
     // Apps Script vẫn đọc được nội dung JSON gửi lên qua e.postData.contents bình thường.
@@ -1362,7 +1696,9 @@ function saveThresholdConfig() {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
             action: 'saveThresholds',
-            thresholds: thresholdConfig.map(t => ({ id: t.id, threshold: t.threshold }))
+            // Gửi kèm tên/danh mục/đvt (không chỉ mã + ngưỡng) - để nếu sau này kế toán ẩn dòng mã này khỏi
+            // Sheet gốc (tồn = 0), Apps Script vẫn lưu lại đủ thông tin cho app dựng lại đúng "dòng ảo".
+            thresholds: thresholdConfig.map(t => ({ id: t.id, threshold: t.threshold, name: t.name, sheet: t.sheet, unit: t.unit }))
         })
     })
         .then(res => res.json())
