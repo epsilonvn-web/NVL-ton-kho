@@ -7,15 +7,18 @@
 // dùng bị kẹt ở bản cache cũ.
 // ==========================================================================
 
-const CACHE_NAME = 'vhip-ton-kho-v1';
+const CACHE_NAME = 'vhip-ton-kho-v2';
 
-// Các file "khung" của app - cần có để app mở lên được dù đang mất mạng
+// Các file "khung" của app - cần có để app mở lên được dù đang mất mạng.
+// QUAN TRỌNG: service-worker.js nằm ở GỐC thư mục, nên đường dẫn ở đây phải tính
+// từ gốc - manifest.json thật ra nằm trong assets/data/, icon nằm trong assets/images/,
+// KHÔNG nằm cùng cấp với service-worker.js (đây là lỗi khiến PWA không cài được trước đó).
 const APP_SHELL = [
     './',
     './index.html',
-    './manifest.json',
-    './icon-192.png',
-    './icon-512.png'
+    './assets/data/manifest.json',
+    './assets/images/icon-192.png',
+    './assets/images/icon-512.png'
 ];
 
 // Cài đặt lần đầu: tải sẵn các file khung vào cache
