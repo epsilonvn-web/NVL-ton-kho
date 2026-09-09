@@ -232,10 +232,15 @@
             <div class="search-bar-row">
                 <input type="text" id="searchInput" class="form-control search-bar" placeholder="Tra cứu mã vật tư, tên vật tư..." onkeyup="renderTable()">
                 <button type="button" class="btn-refresh" id="btn-toggle-movement" onclick="toggleMovementColumns()">📊 Hiện Tồn Đầu/Nhập/Xuất</button>
+                <button type="button" class="btn-refresh" id="btn-toggle-chart" onclick="toggleStockChart()" style="display:none;">📈 Xem Biểu Đồ Top Tồn Kho</button>
                 <button type="button" class="btn-export" onclick="exportToExcel()">📥 Xuất Excel</button>
             </div>
 
             <div class="tag-filters-row" id="tag-filters-container"></div>
+
+            <!-- Biểu đồ Top tồn kho nhiều nhất - ẩn mặc định để giữ giao diện gọn, chỉ hiện khi anh chủ động
+                 bấm xem. Tự động phản ánh đúng bộ lọc (tìm kiếm/hashtag) đang áp dụng trong tab hiện tại. -->
+            <div id="stock-chart-container" style="display:none; margin-bottom:20px;"></div>
 
             <div class="table-responsive">
                 <table>
@@ -494,6 +499,76 @@ function toggleMovementColumns() {
         btn.innerText = showMovementColumns ? '📊 Ẩn Tồn Đầu/Nhập/Xuất' : '📊 Hiện Tồn Đầu/Nhập/Xuất';
     }
     renderTable();
+}
+
+// Bật/tắt biểu đồ "Top tồn kho nhiều nhất" - mặc định TẮT để giữ giao diện gọn gàng như hiện tại,
+// chỉ dựng biểu đồ khi anh chủ động bấm xem (đỡ tốn công tính toán không cần thiết lúc chưa cần tới).
+let showStockChart = false;
+
+function toggleStockChart() {
+    showStockChart = !showStockChart;
+    const btn = document.getElementById('btn-toggle-chart');
+    if (btn) {
+        btn.classList.toggle('active', showStockChart);
+        btn.innerText = showStockChart ? '📈 Ẩn Biểu Đồ' : '📈 Xem Biểu Đồ Top Tồn Kho';
+    }
+    document.getElementById('stock-chart-container').style.display = showStockChart ? 'block' : 'none';
+    renderTable(); // vẽ lại ngay dữ liệu hiện tại thay vì đợi lần render kế tiếp
+}
+
+// Dựng biểu đồ dạng thanh ngang bằng HTML/CSS thuần (không cần thêm thư viện) - Top 10 mã có Tồn Kho
+// cao nhất trong ĐÚNG dữ liệu đang lọc (items đã áp search + hashtag hiện tại của baseFilteredData).
+// Chỉ có ý nghĩa trong 1 danh mục cụ thể (đơn vị tính đồng nhất) - ẩn hẳn nút bấm lẫn khu vực này ở
+// Dashboard Tổng (đơn vị khác nhau, cộng dồn/so sánh vô nghĩa) và tab Giá TB (không phải tồn kho).
+function renderStockChart(items, isPriceView) {
+    const toggleBtn = document.getElementById('btn-toggle-chart');
+    const container = document.getElementById('stock-chart-container');
+    if (!toggleBtn || !container) return;
+
+    const chartApplicable = currentCategory !== 'ALL' && !isPriceView;
+    toggleBtn.style.display = chartApplicable ? '' : 'none';
+
+    if (!chartApplicable || !showStockChart) {
+        container.style.display = 'none';
+        return;
+    }
+    container.style.display = 'block';
+
+    const top = items.slice().sort((a, b) => b.stock - a.stock).slice(0, 10);
+    if (top.length === 0) {
+        container.innerHTML = `<div class="panel" style="padding:16px; color:#94a3b8; font-size:13px;">Không có dữ liệu để vẽ biểu đồ.</div>`;
+        return;
+    }
+
+    const maxStock = Math.max(...top.map(i => i.stock), 1); // tránh chia cho 0 nếu mọi mã đều = 0
+    const rowsHtml = top.map(item => {
+        const pct = Math.max((item.stock / maxStock) * 100, 2); // tối thiểu 2% để thanh vẫn thấy được kể cả tồn = 0
+        return `
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                <div style="flex:0 0 220px; font-size:12.5px; color:var(--vh-dark); text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(item.id)} - ${escapeHtml(item.name)}">
+                    ${escapeHtml(item.name)}
+                </div>
+                <div style="flex:1; background:#f1f5f9; border-radius:6px; overflow:hidden; height:22px; position:relative;">
+                    <div style="width:${pct}%; height:100%; background:linear-gradient(90deg, var(--vh-blue), #5dade2); border-radius:6px;"></div>
+                </div>
+                <div style="flex:0 0 60px; font-size:13px; font-weight:700; color:var(--vh-dark);">${item.stock.toLocaleString('en-US')}</div>
+            </div>
+        `;
+    }).join('');
+
+    container.innerHTML = `
+        <div class="panel" style="padding:18px 20px; margin-bottom:0;">
+            <div style="font-size:13.5px; font-weight:700; color:var(--vh-dark); margin-bottom:14px;">
+                📈 Top ${top.length} mã tồn kho nhiều nhất ${activeTagsByGroupHasFilter() ? '(theo bộ lọc hashtag đang chọn)' : `- Danh mục: ${escapeHtml(currentCategory)}`}
+            </div>
+            ${rowsHtml}
+        </div>
+    `;
+}
+
+// Kiểm tra có đang bật ít nhất 1 hashtag lọc nào không - dùng để đổi phụ đề biểu đồ cho đúng ngữ cảnh
+function activeTagsByGroupHasFilter() {
+    return Object.values(activeTagsByGroup).some(v => !!v);
 }
 
 
@@ -1164,6 +1239,13 @@ function renderTable() {
 
     document.getElementById('stat-total').innerText = filteredData.length;
     updateStockWarningStats(baseFilteredData, isPriceView);
+
+    // Biểu đồ "Top tồn kho nhiều nhất" - chỉ có ý nghĩa trong từng danh mục cụ thể (đơn vị tính đồng nhất),
+    // không hiện ở Dashboard Tổng (đơn vị khác nhau, cộng dồn vô nghĩa) hay tab Giá TB (không phải tồn kho).
+    // Dùng baseFilteredData (đã áp search + hashtag đang chọn) để biểu đồ TỰ ĐỘNG cập nhật theo đúng bộ lọc
+    // hiện tại - anh bấm hashtag nào thì biểu đồ liền phản ánh top tồn kho của đúng nhóm đó, không cần thêm
+    // thao tác gì khác.
+    renderStockChart(baseFilteredData, isPriceView);
 
     // Lưu lại đúng dữ liệu + thứ tự đang hiển thị (đã lọc + đã sort) để dùng khi xuất Excel
     lastRenderedData = filteredData;
