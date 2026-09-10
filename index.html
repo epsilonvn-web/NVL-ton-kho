@@ -303,6 +303,9 @@
                 <input type="text" id="regUsername" class="form-control" placeholder="Chọn Mã đăng nhập (VD: tên viết liền không dấu)" autocomplete="username" onblur="checkUsernameAvailability()" style="margin-bottom:4px;">
                 <div id="regUsernameFeedback" style="display:none; font-size:11.5px; margin-bottom:10px; text-align:left;"></div>
                 <input type="text" id="regName" class="form-control" placeholder="Họ và tên" autocomplete="name">
+                <select id="regDepartment" class="form-control">
+                    <option value="">-- Chọn Phòng ban --</option>
+                </select>
                 <input type="password" id="regPin" class="form-control" placeholder="Đặt Mã PIN (6 số)" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="new-password">
                 <input type="password" id="regPinConfirm" class="form-control" placeholder="Nhập lại Mã PIN" maxlength="6" inputmode="numeric" pattern="[0-9]*" autocomplete="new-password" onkeydown="if(event.key==='Enter') doRegister();">
                 <button type="button" class="btn-login" id="btn-do-register" onclick="doRegister()">📝 Gửi đăng ký</button>
@@ -738,14 +741,15 @@ function checkUsernameAvailability() {
 function doRegister() {
     const username = document.getElementById('regUsername').value.trim();
     const name = document.getElementById('regName').value.trim();
+    const department = document.getElementById('regDepartment').value.trim();
     const pin = document.getElementById('regPin').value.trim();
     const pinConfirm = document.getElementById('regPinConfirm').value.trim();
     const errorBox = document.getElementById('login-error');
     const btn = document.getElementById('btn-do-register');
     errorBox.style.display = 'none';
 
-    if (!username || !name || !pin || !pinConfirm) {
-        errorBox.innerText = 'Anh/chị điền đủ Mã đăng nhập, Họ tên và Mã PIN nhé.';
+    if (!username || !name || !department || !pin || !pinConfirm) {
+        errorBox.innerText = 'Anh/chị điền đủ Mã đăng nhập, Họ tên, Phòng ban và Mã PIN nhé.';
         errorBox.style.display = 'block';
         return;
     }
@@ -766,7 +770,7 @@ function doRegister() {
     fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'register', username: username, name: name, pin: pin })
+        body: JSON.stringify({ action: 'register', username: username, name: name, department: department, pin: pin })
     })
         .then(res => res.json())
         .then(data => {
@@ -774,6 +778,7 @@ function doRegister() {
                 showAlert('Đã gửi đăng ký thành công!\n\nTài khoản của anh/chị đang chờ quản trị viên duyệt, vui lòng quay lại đăng nhập sau nhé.', 'success');
                 document.getElementById('regUsername').value = '';
                 document.getElementById('regName').value = '';
+                document.getElementById('regDepartment').value = '';
                 document.getElementById('regPin').value = '';
                 document.getElementById('regPinConfirm').value = '';
                 switchAuthTab('login');
@@ -873,6 +878,7 @@ const DEMO_DATA = {
 
 let flatInventoryList = [];   // Danh sách gộp phẳng toàn bộ vật tư, mỗi item có thêm field "sheet" (tên danh mục)
 let knownCategories = [];     // Danh sách tên danh mục thật (không tính "Giá TB") - dùng cho dropdown khi nhập thủ công mã mới
+let departmentList = [];      // Danh sách Phòng ban lấy từ sheet DANH_SACH_PHONG_BAN - dùng cho dropdown ở form đăng ký
 
 // Sheet "Giá TB" có cấu trúc khác các sheet tồn kho (không có "Tồn cuối", thay bằng "Giá TB") -
 // nên cần nhận diện riêng để đổi cách hiển thị bảng cho đúng, giống hệt lúc mở trên Google Sheet.
@@ -1251,7 +1257,22 @@ function processData(data) {
     // cho dropdown "Danh mục" khi anh cần nhập thủ công 1 mã hoàn toàn chưa có trong dữ liệu tải về.
     knownCategories = realSheetNames.filter(name => !isPriceSheetName(name));
 
+    // Danh sách Phòng ban lấy từ sheet DANH_SACH_PHONG_BAN (Apps Script trả về qua _departments) -
+    // dùng để dựng dropdown ở form đăng ký, đồng bộ đúng danh sách anh đang quản lý bên Sheet.
+    departmentList = data._departments || [];
+    renderDepartmentOptions();
+
     renderCategoryTabs(realSheetNames);
+}
+
+// Dựng lại danh sách lựa chọn Phòng ban trong form đăng ký theo đúng dữ liệu mới nhất tải về
+function renderDepartmentOptions() {
+    const select = document.getElementById('regDepartment');
+    if (!select) return;
+    const currentVal = select.value;
+    select.innerHTML = '<option value="">-- Chọn Phòng ban --</option>' +
+        departmentList.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+    if (departmentList.includes(currentVal)) select.value = currentVal;
 }
 
 // Sinh các nút tab danh mục dựa trên tên sheet thật có trong dữ liệu
