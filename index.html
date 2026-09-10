@@ -40,8 +40,27 @@
         .logo-text span:nth-child(2) { font-size: 13px; font-weight: 600; letter-spacing: 0.5px; color: #a7f3d0; }
         .user-panel { display: flex; align-items: center; gap: 20px; }
         .user-avatar { width: 36px; height: 36px; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: bold; border: 2px solid white; color: white; }
-        .btn-logout { background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: white; padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; transition: 0.15s; }
+        .btn-logout {
+            background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: white;
+            width: 34px; height: 34px; border-radius: 50%; cursor: pointer; transition: 0.15s;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
         .btn-logout:hover { background: rgba(255,255,255,0.28); }
+
+        .user-account-trigger { display: flex; align-items: center; gap: 12px; cursor: pointer; position: relative; padding: 4px 6px; border-radius: 10px; transition: 0.15s; }
+        .user-account-trigger:hover { background: rgba(255,255,255,0.1); }
+
+        .account-dropdown {
+            display: none; position: absolute; top: calc(100% + 10px); right: 0; z-index: 2000;
+            background: #ffffff; border-radius: 12px; padding: 16px 18px; min-width: 230px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.22); cursor: default; text-align: left;
+        }
+        .account-dropdown.open { display: block; }
+        .account-dropdown-row { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; border-bottom: 1px solid #f1f5f9; }
+        .account-dropdown-row:last-child { border-bottom: none; padding-bottom: 0; }
+        .account-dropdown-row:first-child { padding-top: 0; }
+        .account-dropdown-label { font-size: 10.5px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px; }
+        .account-dropdown-value { font-size: 13.5px; color: var(--vh-navy); font-weight: 700; }
 
         /* ===== MÀN HÌNH ĐĂNG NHẬP ===== */
         #login-overlay {
@@ -298,12 +317,37 @@
             <div class="logo-text"><span>VHIP</span><span>TỒN KHO NVL</span></div>
         </div>
         <div class="user-panel">
-            <div class="user-info" style="color:white; font-weight:600; text-align:right; line-height:1.3;">
-                <div id="user-welcome-text">ADMIN DEMO</div>
-                <div id="user-role-text" style="font-size:11px; font-weight:400; opacity:0.85;"></div>
+            <div class="user-account-trigger" onclick="toggleAccountDropdown()">
+                <div class="user-info" style="color:white; font-weight:600; text-align:right; line-height:1.3;">
+                    <div id="user-welcome-text">ADMIN DEMO</div>
+                    <div id="user-role-text" style="font-size:11px; font-weight:400; opacity:0.85;"></div>
+                </div>
+                <div class="user-avatar" id="avatar-icon">AD</div>
+
+                <!-- Dropdown thông tin tài khoản - hiện/ẩn qua toggleAccountDropdown(), dữ liệu lấy thẳng
+                     từ currentUser (đã có sẵn trong bộ nhớ từ lúc đăng nhập, không cần gọi lại Apps Script). -->
+                <div id="account-dropdown" class="account-dropdown" onclick="event.stopPropagation()">
+                    <div class="account-dropdown-row">
+                        <span class="account-dropdown-label">Mã đăng nhập</span>
+                        <span id="dropdown-username" class="account-dropdown-value"></span>
+                    </div>
+                    <div class="account-dropdown-row">
+                        <span class="account-dropdown-label">Họ và tên</span>
+                        <span id="dropdown-fullname" class="account-dropdown-value"></span>
+                    </div>
+                    <div class="account-dropdown-row">
+                        <span class="account-dropdown-label">Phân cấp tài khoản</span>
+                        <span id="dropdown-rolebadge" class="account-dropdown-value"></span>
+                    </div>
+                </div>
             </div>
-            <div class="user-avatar" id="avatar-icon">AD</div>
-            <button type="button" class="btn-logout" onclick="doLogout()">Đăng xuất</button>
+            <button type="button" class="btn-logout" onclick="doLogout()" title="Đăng xuất" aria-label="Đăng xuất">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                    <polyline points="16 17 21 12 16 7"></polyline>
+                    <line x1="21" y1="12" x2="9" y2="12"></line>
+                </svg>
+            </button>
         </div>
     </div>
 
@@ -773,8 +817,27 @@ function applyLoggedInUI() {
     const initials = (currentUser.name || currentUser.username || '?').trim().split(/\s+/).map(w => w[0]).slice(-2).join('').toUpperCase();
     document.getElementById('avatar-icon').innerText = initials || '?';
 
+    // Điền sẵn dữ liệu cho dropdown thông tin tài khoản (Mã đăng nhập / Họ tên / Phân cấp) -
+    // lấy thẳng từ currentUser đang có trong bộ nhớ, không cần gọi lại Apps Script.
+    document.getElementById('dropdown-username').innerText = currentUser.username;
+    document.getElementById('dropdown-fullname').innerText = currentUser.name || currentUser.username;
+    document.getElementById('dropdown-rolebadge').innerText = ROLE_LABELS[currentUser.role] || currentUser.role;
+
     applyThresholdPermissionUI();
 }
+
+// Bấm vào tên/avatar để xổ/đóng dropdown thông tin tài khoản. Bấm ra ngoài bất kỳ đâu khác cũng
+// tự đóng lại (đăng ký sự kiện click trên toàn trang, kiểm tra xem có bấm ra ngoài khối trigger không).
+function toggleAccountDropdown() {
+    document.getElementById('account-dropdown').classList.toggle('open');
+}
+
+document.addEventListener('click', function (e) {
+    const trigger = document.querySelector('.user-account-trigger');
+    const dropdown = document.getElementById('account-dropdown');
+    if (!trigger || !dropdown) return;
+    if (!trigger.contains(e.target)) dropdown.classList.remove('open');
+});
 
 // Khóa toàn bộ khu vực chỉnh sửa cảnh báo tồn kho nếu tài khoản không có quyền (viewer) -
 // vẫn cho xem danh sách đã cấu hình bình thường, chỉ ẩn/khóa phần thao tác thay đổi.
