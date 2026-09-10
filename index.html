@@ -40,6 +40,11 @@
         .logo-text span:nth-child(2) { font-size: 13px; font-weight: 600; letter-spacing: 0.5px; color: #a7f3d0; }
         .user-panel { display: flex; align-items: center; gap: 20px; }
         .user-avatar { width: 36px; height: 36px; background: rgba(255,255,255,0.2); backdrop-filter: blur(4px); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: bold; border: 2px solid white; color: white; }
+        #pending-badge {
+            position: absolute; top: -7px; right: -7px; min-width: 18px; height: 18px; padding: 0 5px;
+            background: var(--danger); color: white; font-size: 11px; font-weight: 800; line-height: 18px;
+            text-align: center; border-radius: 9px; box-shadow: 0 0 0 2px #ffffff; box-sizing: border-box;
+        }
         .btn-logout {
             background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.4); color: white;
             width: 34px; height: 34px; border-radius: 50%; cursor: pointer; transition: 0.15s;
@@ -363,7 +368,11 @@
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button type="button" class="btn-refresh" onclick="openThresholdConfigPanel()">⚙️ Cảnh báo tồn kho</button>
                 <button type="button" class="btn-refresh" onclick="openReorderPanel()">🛒 Cần Đặt Hàng</button>
-                <button type="button" class="btn-refresh" id="btn-open-accounts" onclick="openAccountsPanel()" style="display:none;">👤 Quản lý tài khoản</button>
+                <button type="button" class="btn-refresh" onclick="openStagnantPanel()">📦 Hàng Tồn Đọng</button>
+                <span style="position:relative; display:inline-block;">
+                    <button type="button" class="btn-refresh" id="btn-open-accounts" onclick="openAccountsPanel()" style="display:none;">👤 Quản lý tài khoản</button>
+                    <span id="pending-badge" style="display:none;">0</span>
+                </span>
                 <button type="button" class="btn-refresh" id="btn-refresh-data" onclick="refreshData()">🔄 Làm mới dữ liệu</button>
             </div>
         </div>
@@ -504,6 +513,31 @@
             <p id="threshold-no-permission-note" style="display:none; background:#eaf4fb; color:var(--vh-blue-dark); padding:10px 14px; border-radius:8px; font-size:12.5px; margin-top:12px;">
                 🔒 Tài khoản của anh/chị chỉ có quyền xem danh sách cảnh báo tồn kho, không chỉnh sửa được. Liên hệ bộ phận mua hàng hoặc quản trị viên nếu cần thay đổi.
             </p>
+
+            <!-- CẤU HÌNH NGƯỠNG "HÀNG ĐỌNG" - chỉ admin thấy, nằm cuối tab Cảnh báo tồn kho -->
+            <div id="stagnant-config-box" style="display:none; margin-top:24px; padding:16px 18px; background:#f8fafc; border-radius:10px; border:1px solid var(--border-color);">
+                <div style="font-size:13.5px; font-weight:700; color:var(--vh-navy); margin-bottom:8px;">📦 Ngưỡng cảnh báo hàng tồn đọng</div>
+                <p style="font-size:12.5px; color:#64748b; margin:0 0 12px 0;">
+                    Mã vật tư nào có số tồn KHÔNG thay đổi liên tục suốt số tháng dưới đây sẽ bị coi là "hàng đọng" (xem ở tab 📦 Hàng Tồn Đọng).
+                    Dựa trên dữ liệu chụp tồn kho tự động mỗi đầu tháng.
+                </p>
+                <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                    <span style="font-size:13px; color:var(--vh-dark);">Coi là hàng đọng khi không đổi số suốt</span>
+                    <input type="number" id="stagnantMonthsInput" class="form-control" min="1" max="60" style="max-width:80px; text-align:center;">
+                    <span style="font-size:13px; color:var(--vh-dark);">tháng liên tiếp</span>
+                    <button type="button" class="btn-export" id="btn-save-stagnant" onclick="saveStagnantMonths()">💾 Lưu ngưỡng</button>
+                    <span id="stagnantSaveStatus" style="font-size:13px; color:#64748b;"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL HÀNG TỒN ĐỌNG - ẩn mặc định, chỉ hiện khi bấm nút "📦 Hàng Tồn Đọng" -->
+        <div class="panel" id="stagnant-panel" style="display:none;">
+            <h3 class="panel-title">
+                <span>📦 Hàng Tồn Đọng</span>
+                <button type="button" class="btn-refresh" onclick="closeStagnantPanel()">← Quay lại danh sách tồn kho</button>
+            </h3>
+            <div id="stagnant-content"><!-- Dữ liệu JS --></div>
         </div>
 
         <!-- PANEL QUẢN LÝ TÀI KHOẢN - chỉ admin thấy nút mở, ẩn mặc định -->
@@ -867,6 +901,14 @@ function applyLoggedInUI() {
     // Nút "Quản lý tài khoản" chỉ dành cho admin - ẩn hẳn với mua_hang/viewer
     const accountsBtn = document.getElementById('btn-open-accounts');
     if (accountsBtn) accountsBtn.style.display = currentUser.role === 'admin' ? '' : 'none';
+    // Đếm số tài khoản đang chờ duyệt để hiện chấm đỏ báo hiệu (chỉ admin)
+    if (currentUser.role === 'admin') refreshPendingBadge();
+
+    // Ô chỉnh ngưỡng "hàng đọng" trong tab Cảnh báo tồn kho - chỉ admin thấy
+    const stagnantBox = document.getElementById('stagnant-config-box');
+    if (stagnantBox) stagnantBox.style.display = currentUser.role === 'admin' ? 'block' : 'none';
+    const stagnantInput = document.getElementById('stagnantMonthsInput');
+    if (stagnantInput) stagnantInput.value = stagnantMonths;
 
     applyThresholdPermissionUI();
 }
@@ -919,6 +961,8 @@ const DEMO_DATA = {
 let flatInventoryList = [];   // Danh sách gộp phẳng toàn bộ vật tư, mỗi item có thêm field "sheet" (tên danh mục)
 let knownCategories = [];     // Danh sách tên danh mục thật (không tính "Giá TB") - dùng cho dropdown khi nhập thủ công mã mới
 let departmentList = [];      // Danh sách Phòng ban lấy từ sheet DANH_SACH_PHONG_BAN - dùng cho dropdown ở form đăng ký
+let stockHistory = { dates: [], data: {} }; // Lịch sử snapshot tồn kho theo tháng (từ sheet LICH_SU_TON_KHO)
+let stagnantMonths = 6;       // Ngưỡng số tháng liên tiếp không đổi số tồn thì coi là "hàng đọng" (admin chỉnh được)
 
 // Sheet "Giá TB" có cấu trúc khác các sheet tồn kho (không có "Tồn cuối", thay bằng "Giá TB") -
 // nên cần nhận diện riêng để đổi cách hiển thị bảng cho đúng, giống hệt lúc mở trên Google Sheet.
@@ -1302,7 +1346,14 @@ function processData(data) {
     departmentList = data._departments || [];
     renderDepartmentOptions();
 
+    // Lịch sử snapshot tồn kho + ngưỡng tháng hàng đọng (dùng cho tab "Hàng tồn đọng")
+    stockHistory = data._stockHistory || { dates: [], data: {} };
+    stagnantMonths = Number(data._stagnantMonths) || 6;
+
     renderCategoryTabs(realSheetNames);
+
+    // Cập nhật lại chấm đỏ chờ duyệt sau mỗi lần làm mới dữ liệu (chỉ chạy nếu admin đang đăng nhập)
+    if (currentUser && currentUser.role === 'admin') refreshPendingBadge();
 }
 
 // Dựng lại danh sách lựa chọn Phòng ban trong form đăng ký theo đúng dữ liệu mới nhất tải về
@@ -1924,7 +1975,7 @@ function exportToExcel() {
 let pendingThresholdItem = null; // mã vật tư đang được chọn từ ô gợi ý, chờ bấm "+ Thêm"
 
 // Danh sách toàn bộ panel cấp cao trong app - dùng để ẩn hết rồi chỉ hiện đúng 1 panel cần xem
-const ALL_PANEL_IDS = ['inventory-panel', 'threshold-config-panel', 'reorder-panel', 'accounts-panel'];
+const ALL_PANEL_IDS = ['inventory-panel', 'threshold-config-panel', 'reorder-panel', 'accounts-panel', 'stagnant-panel'];
 
 function showOnlyPanel(panelIdToShow) {
     ALL_PANEL_IDS.forEach(id => {
@@ -1951,6 +2002,153 @@ function closeReorderPanel() {
     showOnlyPanel('inventory-panel');
 }
 
+// Lưu ngưỡng số tháng "hàng đọng" (chỉ admin) - gọi Apps Script ghi vào sheet cấu hình
+function saveStagnantMonths() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    const months = parseInt(document.getElementById('stagnantMonthsInput').value, 10);
+    const status = document.getElementById('stagnantSaveStatus');
+    const btn = document.getElementById('btn-save-stagnant');
+
+    if (!months || months < 1) {
+        status.style.color = 'var(--danger)';
+        status.innerText = 'Số tháng phải ≥ 1';
+        return;
+    }
+
+    btn.disabled = true;
+    status.style.color = '#64748b';
+    status.innerText = 'Đang lưu...';
+
+    fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'saveStagnantMonths', requesterUsername: currentUser.username, months: months })
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.success) {
+                stagnantMonths = months;
+                status.style.color = 'var(--vh-green-dark)';
+                status.innerText = '✅ Đã lưu';
+            } else {
+                status.style.color = 'var(--danger)';
+                status.innerText = '❌ ' + ((data && data.error) || 'Lưu thất bại');
+            }
+        })
+        .catch(() => {
+            status.style.color = 'var(--danger)';
+            status.innerText = '❌ Không kết nối được máy chủ';
+        })
+        .finally(() => { btn.disabled = false; });
+}
+
+// ---- PANEL HÀNG TỒN ĐỌNG ----
+function openStagnantPanel() {
+    showOnlyPanel('stagnant-panel');
+    renderStagnantPanel();
+}
+
+function closeStagnantPanel() {
+    showOnlyPanel('inventory-panel');
+}
+
+// Tính danh sách "hàng đọng": mã nào có số tồn KHÔNG đổi qua N mốc snapshot gần nhất liên tiếp
+// (N = stagnantMonths), và số tồn đó > 0 (tồn = 0 thì là hết hàng, không phải đọng).
+function getStagnantList() {
+    const dates = stockHistory.dates || [];
+    const data = stockHistory.data || {};
+    const N = stagnantMonths;
+
+    // Cần ít nhất N mốc chụp mới đủ dữ liệu kết luận "không đổi suốt N tháng"
+    if (dates.length < N) return { notEnoughData: true, needed: N, have: dates.length, items: [] };
+
+    const items = [];
+    Object.keys(data).forEach(code => {
+        const series = data[code];
+        // Lấy N giá trị gần nhất (cuối mảng)
+        const recent = series.slice(-N);
+        // Bỏ qua nếu thiếu dữ liệu ở bất kỳ mốc nào trong N mốc đó (mã mới xuất hiện chưa đủ lịch sử)
+        if (recent.some(v => v === null || v === undefined)) return;
+        const first = recent[0];
+        if (first <= 0) return; // tồn = 0 là hết hàng, không tính đọng
+        const allSame = recent.every(v => v === first);
+        if (allSame) {
+            const item = flatInventoryList.find(i => String(i.id) === String(code) && !isPriceSheetName(i.sheet));
+            items.push({
+                id: code,
+                name: item ? item.name : '(không rõ tên)',
+                unit: item ? item.unit : '',
+                sheet: item ? item.sheet : '',
+                stock: first,
+                months: N
+            });
+        }
+    });
+
+    items.sort((a, b) => b.stock - a.stock);
+    return { notEnoughData: false, items: items };
+}
+
+function renderStagnantPanel() {
+    const container = document.getElementById('stagnant-content');
+    const result = getStagnantList();
+
+    if (result.notEnoughData) {
+        container.innerHTML = `
+            <p style="color:#64748b; font-size:13.5px; line-height:1.6;">
+                ⏳ Chưa đủ dữ liệu để phân tích. Tính năng này cần dữ liệu chụp tồn kho tự động mỗi đầu tháng —
+                cần ít nhất <b>${result.needed} mốc</b> (tương ứng ${result.needed} tháng) để kết luận 1 mã có "đọng" hay không,
+                hiện mới có <b>${result.have} mốc</b>.<br><br>
+                Cứ để hệ thống chạy tự động, sau đủ ${result.needed} tháng sẽ có kết quả. (Đây là đặc điểm của phương pháp
+                theo dõi theo thời gian, giống như mới lắp camera thì phải chờ quay đủ lâu mới xem lại được.)
+            </p>`;
+        return;
+    }
+
+    if (result.items.length === 0) {
+        container.innerHTML = `
+            <p style="color:var(--vh-green-dark); font-size:13.5px;">
+                ✅ Không có mã nào bị tồn đọng quá ${stagnantMonths} tháng. Kho đang luân chuyển tốt!
+            </p>`;
+        return;
+    }
+
+    const rows = result.items.map(item => `
+        <tr>
+            <td class="text-left font-bold">${escapeHtml(item.id)}</td>
+            <td class="text-left">${escapeHtml(item.name)}</td>
+            <td class="text-left"><span class="badge badge-info">${escapeHtml(item.sheet)}</span></td>
+            <td>${escapeHtml(item.unit)}</td>
+            <td class="text-right" style="font-weight:bold;">${item.stock.toLocaleString('en-US')}</td>
+        </tr>
+    `).join('');
+
+    container.innerHTML = `
+        <p style="color:#64748b; font-size:13px; margin-top:-6px; margin-bottom:8px;">
+            Các mã có số tồn <b>không thay đổi liên tục suốt ${stagnantMonths} tháng gần nhất</b> (không nhập, không xuất) — nên xem xét đẩy hàng để tận dụng vốn.
+        </p>
+        <p style="color:#94a3b8; font-size:12px; margin-top:0; margin-bottom:18px;">
+            💡 Dựa trên dữ liệu chụp tồn kho tự động mỗi đầu tháng. Ngưỡng ${stagnantMonths} tháng do quản trị viên đặt (chỉnh ở tab ⚙️ Cảnh báo tồn kho).
+        </p>
+        <div style="margin-bottom:14px; font-size:13.5px; font-weight:700; color:var(--danger);">
+            ⚠️ Có ${result.items.length} mã đang tồn đọng, cần xem xét.
+        </div>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="text-left">Mã Vật Tư</th>
+                        <th class="text-left">Tên Vật Tư</th>
+                        <th class="text-left">Danh Mục</th>
+                        <th>ĐVT</th>
+                        <th class="text-right">Tồn (không đổi)</th>
+                    </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+            </table>
+        </div>`;
+}
+
 // ---- PANEL QUẢN LÝ TÀI KHOẢN (chỉ admin) ----
 let accountsList = [];        // Danh sách tài khoản tải từ Apps Script (không có PIN)
 let accountsPendingChanges = {}; // { username: { role, status } } - các thay đổi CHƯA lưu
@@ -1959,6 +2157,32 @@ function openAccountsPanel() {
     if (!currentUser || currentUser.role !== 'admin') return;
     showOnlyPanel('accounts-panel');
     loadAccounts();
+}
+
+// Đếm số tài khoản đang "Pending" (chờ duyệt) để hiện chấm đỏ trên nút Quản lý tài khoản.
+// Gọi khi admin đăng nhập / làm mới dữ liệu - dùng chính action listAccounts (đã chặn quyền admin).
+function refreshPendingBadge() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'listAccounts', requesterUsername: currentUser.username })
+    })
+        .then(res => res.json())
+        .then(data => {
+            const badge = document.getElementById('pending-badge');
+            if (!badge) return;
+            if (data && data.success) {
+                const pendingCount = (data.accounts || []).filter(a => String(a.status).toLowerCase() === 'pending').length;
+                if (pendingCount > 0) {
+                    badge.innerText = pendingCount;
+                    badge.style.display = 'inline-block';
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        })
+        .catch(() => { /* im lặng - không phiền admin nếu lỗi mạng lúc đếm badge */ });
 }
 
 function closeAccountsPanel() {
@@ -2073,6 +2297,7 @@ function saveAccountChanges() {
                 accountsPendingChanges = {};
                 btn.style.display = 'none';
                 loadAccounts(); // tải lại để hiện đúng trạng thái mới nhất từ Sheet
+                refreshPendingBadge(); // cập nhật lại chấm đỏ (duyệt xong thì số chờ duyệt giảm)
             } else {
                 status.innerText = '❌ ' + ((data && data.error) || 'Lưu thất bại.');
             }
