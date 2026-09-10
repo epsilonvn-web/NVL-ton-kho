@@ -363,6 +363,7 @@
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button type="button" class="btn-refresh" onclick="openThresholdConfigPanel()">⚙️ Cảnh báo tồn kho</button>
                 <button type="button" class="btn-refresh" onclick="openReorderPanel()">🛒 Cần Đặt Hàng</button>
+                <button type="button" class="btn-refresh" id="btn-open-accounts" onclick="openAccountsPanel()" style="display:none;">👤 Quản lý tài khoản</button>
                 <button type="button" class="btn-refresh" id="btn-refresh-data" onclick="refreshData()">🔄 Làm mới dữ liệu</button>
             </div>
         </div>
@@ -503,6 +504,41 @@
             <p id="threshold-no-permission-note" style="display:none; background:#eaf4fb; color:var(--vh-blue-dark); padding:10px 14px; border-radius:8px; font-size:12.5px; margin-top:12px;">
                 🔒 Tài khoản của anh/chị chỉ có quyền xem danh sách cảnh báo tồn kho, không chỉnh sửa được. Liên hệ bộ phận mua hàng hoặc quản trị viên nếu cần thay đổi.
             </p>
+        </div>
+
+        <!-- PANEL QUẢN LÝ TÀI KHOẢN - chỉ admin thấy nút mở, ẩn mặc định -->
+        <div class="panel" id="accounts-panel" style="display:none;">
+            <h3 class="panel-title">
+                <span>👤 Quản Lý Tài Khoản</span>
+                <button type="button" class="btn-refresh" onclick="closeAccountsPanel()">← Quay lại danh sách tồn kho</button>
+            </h3>
+
+            <p style="color:#64748b; font-size:13px; margin-top:-10px; margin-bottom:18px;">
+                Duyệt tài khoản mới đăng ký (đổi "Chờ duyệt" → "Hoạt động"), khóa tài khoản, hoặc nâng quyền lên "Mua hàng".
+                Đổi xong nhớ bấm "💾 Lưu thay đổi" để ghi thật lên Google Sheet.
+            </p>
+
+            <div id="accounts-loading" style="color:#94a3b8; font-size:13px;">Đang tải danh sách tài khoản...</div>
+
+            <div class="table-responsive" id="accounts-table-wrap" style="display:none;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-left">Mã đăng nhập</th>
+                            <th class="text-left">Họ tên</th>
+                            <th class="text-left">Phòng ban</th>
+                            <th>Vai trò</th>
+                            <th>Trạng thái</th>
+                        </tr>
+                    </thead>
+                    <tbody id="accountsTableBody"><!-- Dữ liệu JS --></tbody>
+                </table>
+            </div>
+
+            <div style="margin-top:20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="btn-export" id="btn-save-accounts" onclick="saveAccountChanges()" style="display:none;">💾 Lưu thay đổi</button>
+                <span id="accountsSaveStatus" style="font-size:13px; color:#64748b;"></span>
+            </div>
         </div>
 
         <!-- PANEL GỢI Ý ĐẶT HÀNG LẠI - ẩn mặc định, chỉ hiện khi bấm nút "🛒 Cần Đặt Hàng" -->
@@ -827,6 +863,10 @@ function applyLoggedInUI() {
     document.getElementById('dropdown-username').innerText = currentUser.username;
     document.getElementById('dropdown-fullname').innerText = currentUser.name || currentUser.username;
     document.getElementById('dropdown-rolebadge').innerText = ROLE_LABELS[currentUser.role] || currentUser.role;
+
+    // Nút "Quản lý tài khoản" chỉ dành cho admin - ẩn hẳn với mua_hang/viewer
+    const accountsBtn = document.getElementById('btn-open-accounts');
+    if (accountsBtn) accountsBtn.style.display = currentUser.role === 'admin' ? '' : 'none';
 
     applyThresholdPermissionUI();
 }
@@ -1884,7 +1924,7 @@ function exportToExcel() {
 let pendingThresholdItem = null; // mã vật tư đang được chọn từ ô gợi ý, chờ bấm "+ Thêm"
 
 // Danh sách toàn bộ panel cấp cao trong app - dùng để ẩn hết rồi chỉ hiện đúng 1 panel cần xem
-const ALL_PANEL_IDS = ['inventory-panel', 'threshold-config-panel', 'reorder-panel'];
+const ALL_PANEL_IDS = ['inventory-panel', 'threshold-config-panel', 'reorder-panel', 'accounts-panel'];
 
 function showOnlyPanel(panelIdToShow) {
     ALL_PANEL_IDS.forEach(id => {
@@ -1909,6 +1949,141 @@ function openReorderPanel() {
 
 function closeReorderPanel() {
     showOnlyPanel('inventory-panel');
+}
+
+// ---- PANEL QUẢN LÝ TÀI KHOẢN (chỉ admin) ----
+let accountsList = [];        // Danh sách tài khoản tải từ Apps Script (không có PIN)
+let accountsPendingChanges = {}; // { username: { role, status } } - các thay đổi CHƯA lưu
+
+function openAccountsPanel() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+    showOnlyPanel('accounts-panel');
+    loadAccounts();
+}
+
+function closeAccountsPanel() {
+    showOnlyPanel('inventory-panel');
+}
+
+function loadAccounts() {
+    if (!currentUser || currentUser.role !== 'admin') return;
+
+    document.getElementById('accounts-loading').style.display = 'block';
+    document.getElementById('accounts-table-wrap').style.display = 'none';
+    document.getElementById('btn-save-accounts').style.display = 'none';
+    accountsPendingChanges = {};
+
+    fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'listAccounts', requesterUsername: currentUser.username })
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.success) {
+                accountsList = data.accounts || [];
+                renderAccountsTable();
+                document.getElementById('accounts-loading').style.display = 'none';
+                document.getElementById('accounts-table-wrap').style.display = 'block';
+            } else {
+                document.getElementById('accounts-loading').innerText = '❌ ' + ((data && data.error) || 'Không tải được danh sách tài khoản.');
+            }
+        })
+        .catch(err => {
+            console.error('Lỗi tải danh sách tài khoản:', err);
+            document.getElementById('accounts-loading').innerText = '❌ Không kết nối được máy chủ.';
+        });
+}
+
+const ROLE_OPTIONS = [
+    { value: 'admin', label: 'Quản trị viên' },
+    { value: 'mua_hang', label: 'Mua hàng' },
+    { value: 'viewer', label: 'Người xem' }
+];
+const STATUS_OPTIONS = [
+    { value: 'Pending', label: 'Chờ duyệt' },
+    { value: 'Active', label: 'Hoạt động' },
+    { value: 'Block', label: 'Khóa' }
+];
+
+function renderAccountsTable() {
+    const tbody = document.getElementById('accountsTableBody');
+    if (accountsList.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8; padding:16px;">Chưa có tài khoản nào.</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = accountsList.map(acc => {
+        const safeUser = String(acc.username).replace(/'/g, "\\'");
+        const currentRole = (accountsPendingChanges[acc.username] && accountsPendingChanges[acc.username].role) || acc.role;
+        const currentStatus = (accountsPendingChanges[acc.username] && accountsPendingChanges[acc.username].status) || acc.status;
+        // Tài khoản đang "Chờ duyệt" tô nền cam nhạt cho dễ nhận biết cần xử lý
+        const rowStyle = String(currentStatus).toLowerCase() === 'pending' ? ' style="background:#fff8ec;"' : '';
+
+        const roleOptionsHtml = ROLE_OPTIONS.map(o => `<option value="${o.value}"${o.value === currentRole ? ' selected' : ''}>${o.label}</option>`).join('');
+        const statusOptionsHtml = STATUS_OPTIONS.map(o => `<option value="${o.value}"${o.value === currentStatus ? ' selected' : ''}>${o.label}</option>`).join('');
+
+        return `
+        <tr${rowStyle}>
+            <td class="text-left font-bold">${escapeHtml(acc.username)}</td>
+            <td class="text-left">${escapeHtml(acc.name)}</td>
+            <td class="text-left">${escapeHtml(acc.department || '-')}</td>
+            <td>
+                <select class="form-control" style="max-width:150px; margin:0 auto;" onchange="markAccountChange('${safeUser}', 'role', this.value)">
+                    ${roleOptionsHtml}
+                </select>
+            </td>
+            <td>
+                <select class="form-control" style="max-width:130px; margin:0 auto;" onchange="markAccountChange('${safeUser}', 'status', this.value)">
+                    ${statusOptionsHtml}
+                </select>
+            </td>
+        </tr>
+    `;
+    }).join('');
+}
+
+// Ghi nhận thay đổi CỤC BỘ (chưa lưu lên Sheet) khi anh đổi dropdown Vai trò/Trạng thái của 1 dòng -
+// hiện nút "Lưu thay đổi" ngay khi có ít nhất 1 thay đổi đang chờ.
+function markAccountChange(username, field, value) {
+    if (!accountsPendingChanges[username]) accountsPendingChanges[username] = {};
+    accountsPendingChanges[username][field] = value;
+    document.getElementById('btn-save-accounts').style.display = 'inline-block';
+}
+
+function saveAccountChanges() {
+    const usernames = Object.keys(accountsPendingChanges);
+    if (usernames.length === 0) return;
+
+    const updates = usernames.map(u => ({ username: u, role: accountsPendingChanges[u].role, status: accountsPendingChanges[u].status }));
+    const btn = document.getElementById('btn-save-accounts');
+    const status = document.getElementById('accountsSaveStatus');
+    btn.disabled = true;
+    status.innerText = 'Đang lưu...';
+
+    fetch(GAS_API_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({ action: 'updateAccounts', requesterUsername: currentUser.username, updates: updates })
+    })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.success) {
+                status.innerText = '✅ Đã lưu lúc ' + new Date().toLocaleTimeString('vi-VN');
+                accountsPendingChanges = {};
+                btn.style.display = 'none';
+                loadAccounts(); // tải lại để hiện đúng trạng thái mới nhất từ Sheet
+            } else {
+                status.innerText = '❌ ' + ((data && data.error) || 'Lưu thất bại.');
+            }
+        })
+        .catch(err => {
+            console.error('Lỗi lưu tài khoản:', err);
+            status.innerText = '❌ Không kết nối được máy chủ.';
+        })
+        .finally(() => {
+            btn.disabled = false;
+        });
 }
 
 // Gợi ý mã/tên vật tư khi gõ - tối đa 8 kết quả để không dài quá
