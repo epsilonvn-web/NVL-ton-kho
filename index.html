@@ -1289,7 +1289,10 @@ function isHeaderRow(item) {
 // Chuyển dữ liệu thô { sheetName: [...] } thành danh sách phẳng để dễ lọc/hiển thị
 function processData(data) {
     flatInventoryList = [];
-    const realSheetNames = Object.keys(data).filter(key => key !== '_thresholds'); // "_thresholds" không phải sheet tồn kho
+    // Loại trừ mọi "key phụ" (metadata) mà Apps Script gắn thêm vào - chúng bắt đầu bằng dấu gạch dưới
+    // (_thresholds, _departments, _stockHistory, _stagnantMonths...) và KHÔNG phải mảng danh mục tồn kho.
+    // Nếu không loại, vòng lặp bên dưới sẽ gọi .forEach() lên chúng và nổ lỗi "items.forEach is not a function".
+    const realSheetNames = Object.keys(data).filter(key => !key.startsWith('_'));
 
     realSheetNames.forEach(sheetName => {
         const items = data[sheetName] || [];
