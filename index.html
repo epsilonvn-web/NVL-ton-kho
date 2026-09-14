@@ -639,11 +639,15 @@ const GAS_API_URL = "https://script.google.com/macros/s/AKfycbx4VqKpT_h0suRstLds
 // được gì). Tài khoản (Mã đăng nhập | Mã PIN | Họ tên | Vai trò) lưu ở sheet
 // "TAI_KHOAN" trên Google Sheet, kiểm tra qua Apps Script (action 'login') -
 // không tải cả danh sách PIN về trình duyệt để tránh lộ mã PIN của người khác.
-// Phiên đăng nhập lưu ở localStorage, không giới hạn ngày hết hạn (đăng xuất
-// thủ công mới mất) - phù hợp môi trường nội bộ dùng trên thiết bị cá nhân.
+// Phiên đăng nhập lưu ở localStorage, kèm session TOKEN do Apps Script sinh ra lúc đăng nhập -
+// mọi request lấy/lưu dữ liệu sau này đều phải gửi kèm token này, Apps Script mới trả dữ liệu thật
+// (vá lỗ hổng gọi thẳng GAS_API_URL không cần đăng nhập). Phiên client cũng tự hết hạn sau
+// CLIENT_SESSION_MAX_AGE_MS (đồng bộ với hạn token phía server) để tránh 1 thiết bị bị mất/mượn
+// còn phiên cũ vẫn đăng nhập được mãi.
 // ============================================================================
 const SESSION_KEY = 'vhip_session';
-let currentUser = null; // { username, name, role } sau khi đăng nhập thành công
+const CLIENT_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000; // 12 tiếng - tự đăng xuất nếu phiên cũ hơn mức này
+let currentUser = null; // { username, name, role, token, loginAt } sau khi đăng nhập thành công
 
 function getStoredSession() {
     try {
@@ -656,15 +660,42 @@ function getStoredSession() {
 
 // Kiểm tra đã đăng nhập từ trước chưa (còn phiên lưu trong localStorage) -
 // nếu có thì vào thẳng app luôn, không bắt đăng nhập lại mỗi lần mở web.
+// Phiên phải có đủ token (phiên cũ tạo từ bản code trước khi có token sẽ bị coi là hết hạn - đăng nhập
+// lại 1 lần là xong) và chưa quá CLIENT_SESSION_MAX_AGE_MS mới được coi là hợp lệ.
+// QUAN TRỌNG: fetchDataFromGoogleSheets() CHỈ được gọi ở đây (sau khi xác nhận đã đăng nhập) - không
+// gọi vô điều kiện lúc trang vừa mở nữa, để dữ liệu tồn kho không bị tải về trước khi có phiên hợp lệ.
 function checkLoginSession() {
     const session = getStoredSession();
-    if (session && session.username && session.role) {
+    const isFresh = session && session.loginAt && (Date.now() - session.loginAt < CLIENT_SESSION_MAX_AGE_MS);
+    if (session && session.username && session.role && session.token && isFresh) {
         currentUser = session;
         applyLoggedInUI();
         document.getElementById('login-overlay').style.display = 'none';
+        fetchDataFromGoogleSheets();
     } else {
+        localStorage.removeItem(SESSION_KEY); // dọn phiên cũ/thiếu token/hết hạn
         document.getElementById('login-overlay').style.display = 'flex';
     }
+}
+
+// Dùng chung mỗi khi Apps Script báo token không hợp lệ/hết hạn (error === 'Unauthorized') - dọn phiên,
+// báo cho người dùng biết rõ lý do và đưa về màn hình đăng nhập, thay vì hiện lỗi mạng chung chung
+// hoặc lặng lẽ rơi về dữ liệu demo (dễ gây hiểu lầm "mất mạng" trong khi thực ra là hết phiên).
+function handleUnauthorizedSession() {
+    localStorage.removeItem(SESSION_KEY);
+    currentUser = null;
+    showAlert('Phiên đăng nhập đã hết hạn hoặc không hợp lệ - anh/chị đăng nhập lại nhé.', 'info');
+    document.getElementById('login-overlay').style.display = 'flex';
+}
+
+// Kiểm tra nhanh 1 phản hồi JSON từ Apps Script có phải lỗi "hết phiên" không - nếu đúng thì tự xử lý
+// (handleUnauthorizedSession) và trả true để nơi gọi dừng xử lý tiếp, không đi lố sang nhánh lỗi khác.
+function isUnauthorizedResponse(data) {
+    if (data && data.success === false && data.error === 'Unauthorized') {
+        handleUnauthorizedSession();
+        return true;
+    }
+    return false;
 }
 
 // Modal thông báo tuỳ chỉnh (thay cho alert() mặc định xấu của trình duyệt) - type: 'success' | 'error' | 'info'
@@ -741,12 +772,15 @@ function doLogin() {
         .then(res => res.json())
         .then(data => {
             if (data && data.success) {
-                currentUser = { username: data.username, name: data.name, role: data.role };
+                // token: session token do Apps Script sinh ra - lưu lại để gửi kèm mọi request sau này.
+                // loginAt: mốc thời gian đăng nhập - dùng để tự đăng xuất phía client sau CLIENT_SESSION_MAX_AGE_MS.
+                currentUser = { username: data.username, name: data.name, role: data.role, token: data.token, loginAt: Date.now() };
                 localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
                 document.getElementById('login-overlay').style.display = 'none';
                 document.getElementById('loginUsername').value = '';
                 document.getElementById('loginPin').value = '';
                 applyLoggedInUI();
+                fetchDataFromGoogleSheets(); // chỉ tải dữ liệu tồn kho SAU KHI có token hợp lệ
             } else {
                 errorBox.innerText = (data && data.error) || 'Sai Mã đăng nhập hoặc Mã PIN.';
                 errorBox.style.display = 'block';
@@ -1195,8 +1229,9 @@ function getStockColorHex(status) {
 // activeTagsByGroup (dùng cho hashtag lọc nhanh) được khai báo cùng khối code hashtag bên dưới
 
 document.addEventListener('DOMContentLoaded', function () {
+    // checkLoginSession() tự gọi fetchDataFromGoogleSheets() bên trong nếu tìm thấy phiên hợp lệ -
+    // KHÔNG gọi vô điều kiện ở đây nữa, tránh tải dữ liệu tồn kho trước khi có token hợp lệ.
     checkLoginSession();
-    fetchDataFromGoogleSheets();
 });
 
 // Đăng ký Service Worker - bật tính năng PWA (cài ra màn hình chính điện thoại, mở lên
@@ -1238,16 +1273,22 @@ function updateSyncStatusText(isDemo) {
         : `🕒 Dữ liệu được tải lúc: ${timeStr}`;
 }
 
-// Gọi API lấy dữ liệu từ Google Sheets Database (qua Apps Script)
+// Gọi API lấy dữ liệu từ Google Sheets Database (qua Apps Script) - PHẢI gửi kèm token đăng nhập,
+// Apps Script mới trả dữ liệu thật (xem huong-dan-sua-bao-mat-api.md). Nếu chưa đăng nhập (chưa có
+// currentUser.token) thì không gọi luôn, tránh lộ việc URL vẫn nhận request dù thiếu token.
 function fetchDataFromGoogleSheets() {
+    if (!currentUser || !currentUser.token) return;
     showLoadingState();
     setSyncing(true);
-    fetch(GAS_API_URL)
+    fetch(GAS_API_URL + '?token=' + encodeURIComponent(currentUser.token))
         .then(response => {
             if (!response.ok) throw new Error("HTTP " + response.status);
             return response.json();
         })
         .then(data => {
+            // Token hết hạn/không hợp lệ -> Apps Script trả { success:false, error:'Unauthorized' } thay
+            // vì dữ liệu tồn kho thật. Xử lý riêng, KHÔNG rơi về dữ liệu demo (dễ gây hiểu lầm mất mạng).
+            if (isUnauthorizedResponse(data)) return;
             processData(data);
             toggleDemoBanner(false);
             updateSyncStatusText(false);
@@ -2025,10 +2066,11 @@ function saveStagnantMonths() {
     fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'saveStagnantMonths', requesterUsername: currentUser.username, months: months })
+        body: JSON.stringify({ action: 'saveStagnantMonths', requesterUsername: currentUser.username, months: months, token: currentUser.token })
     })
         .then(res => res.json())
         .then(data => {
+            if (isUnauthorizedResponse(data)) return;
             if (data && data.success) {
                 stagnantMonths = months;
                 status.style.color = 'var(--vh-green-dark)';
@@ -2169,10 +2211,11 @@ function refreshPendingBadge() {
     fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'listAccounts', requesterUsername: currentUser.username })
+        body: JSON.stringify({ action: 'listAccounts', requesterUsername: currentUser.username, token: currentUser.token })
     })
         .then(res => res.json())
         .then(data => {
+            if (isUnauthorizedResponse(data)) return;
             const badge = document.getElementById('pending-badge');
             if (!badge) return;
             if (data && data.success) {
@@ -2203,10 +2246,11 @@ function loadAccounts() {
     fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'listAccounts', requesterUsername: currentUser.username })
+        body: JSON.stringify({ action: 'listAccounts', requesterUsername: currentUser.username, token: currentUser.token })
     })
         .then(res => res.json())
         .then(data => {
+            if (isUnauthorizedResponse(data)) return;
             if (data && data.success) {
                 accountsList = data.accounts || [];
                 renderAccountsTable();
@@ -2291,10 +2335,11 @@ function saveAccountChanges() {
     fetch(GAS_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ action: 'updateAccounts', requesterUsername: currentUser.username, updates: updates })
+        body: JSON.stringify({ action: 'updateAccounts', requesterUsername: currentUser.username, updates: updates, token: currentUser.token })
     })
         .then(res => res.json())
         .then(data => {
+            if (isUnauthorizedResponse(data)) return;
             if (data && data.success) {
                 status.innerText = '✅ Đã lưu lúc ' + new Date().toLocaleTimeString('vi-VN');
                 accountsPendingChanges = {};
@@ -2737,11 +2782,13 @@ function saveThresholdConfig() {
             action: 'saveThresholds',
             // Gửi kèm tên/danh mục/đvt (không chỉ mã + ngưỡng) - để nếu sau này kế toán ẩn dòng mã này khỏi
             // Sheet gốc (tồn = 0), Apps Script vẫn lưu lại đủ thông tin cho app dựng lại đúng "dòng ảo".
-            thresholds: thresholdConfig.map(t => ({ id: t.id, threshold: t.threshold, name: t.name, sheet: t.sheet, unit: t.unit }))
+            thresholds: thresholdConfig.map(t => ({ id: t.id, threshold: t.threshold, name: t.name, sheet: t.sheet, unit: t.unit })),
+            token: currentUser.token
         })
     })
         .then(res => res.json())
         .then(data => {
+            if (isUnauthorizedResponse(data)) return;
             if (data && data.success) {
                 status.innerText = '✅ Đã lưu lúc ' + new Date().toLocaleTimeString('vi-VN');
             } else {
