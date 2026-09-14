@@ -903,10 +903,30 @@ function doRegister() {
         });
 }
 
+// Đăng xuất: gọi lên Apps Script action 'logout' để HỦY THẬT token trên server (xem revokeSessionToken
+// bên Code.gs), không chỉ xóa phiên ở trình duyệt như trước - tránh trường hợp ai đó lỡ có được token
+// này (máy dùng chung, lộ qua Console...) vẫn dùng tiếp được dù anh/chị đã bấm đăng xuất.
+// Việc dọn localStorage + tải lại trang vẫn làm NGAY dù request hủy token có lỗi mạng hay không (best-effort:
+// ưu tiên trải nghiệm đăng xuất mượt, token phía server nếu lỡ không hủy được thì tối đa 6 tiếng cũng tự hết hạn).
 function doLogout() {
     showConfirm('Anh/chị chắc chắn muốn đăng xuất?', function () {
-        localStorage.removeItem(SESSION_KEY);
-        location.reload(); // tải lại trang cho sạch trạng thái, quay về màn hình đăng nhập
+        const tokenToRevoke = currentUser && currentUser.token;
+        const finishLogout = () => {
+            localStorage.removeItem(SESSION_KEY);
+            location.reload(); // tải lại trang cho sạch trạng thái, quay về màn hình đăng nhập
+        };
+
+        if (tokenToRevoke) {
+            fetch(GAS_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                body: JSON.stringify({ action: 'logout', token: tokenToRevoke })
+            })
+                .catch(err => console.error('Không hủy được token trên server lúc đăng xuất (bỏ qua, vẫn đăng xuất bình thường):', err))
+                .finally(finishLogout);
+        } else {
+            finishLogout();
+        }
     });
 }
 
