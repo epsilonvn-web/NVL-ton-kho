@@ -1,6 +1,6 @@
 {
-  "name": "VHIP - Quản lý NVL",
-  "short_name": "VHIP Quản lý NVL",
+  "name": "Quản lý NVL",
+  "short_name": "Quản lý NVL",
   "description": "Hệ thống quản lý nguyên vật liệu - Vĩnh Hưng",
   "start_url": "./index.html",
   "scope": "./",
