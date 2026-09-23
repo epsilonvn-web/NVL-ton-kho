@@ -86,54 +86,27 @@ function hasPermission(key) {
 async function checkLoginSession() {
     const token = getStoredToken();
     const overlay = document.getElementById('login-overlay');
-
     if (!token) {
         if (overlay) overlay.style.display = 'flex';
         return;
     }
-
-    // Khi F5, không gọi action riêng chỉ để kiểm tra phiên nữa. Chính API GET dữ liệu đã bắt buộc
-    // xác minh token ở server và đồng thời trả _session mới nhất. Cách này vừa ít request hơn, vừa tránh
-    // trường hợp frontend mới gọi sessionVerify nhưng bản Apps Script đang deploy chưa có action đó.
-    // Có token lưu từ lần đăng nhập trước thì tạm ẩn màn hình login để tránh nháy/văng về form login
-    // trong lúc server đang xác minh phiên.
-    if (overlay) overlay.style.display = 'none';
-    clearAuthError();
-    showLoadingState();
-    setSyncing(true);
-
     try {
-        const response = await fetch(GAS_API_URL + '?token=' + encodeURIComponent(token), { cache: 'no-store' });
-        if (!response.ok) throw new Error('HTTP ' + response.status);
-        const data = await response.json();
-
-        // Chỉ xóa token khi server xác nhận token thực sự không còn hợp lệ. Lỗi mạng hay lỗi tạm thời
-        // không được tự ý đăng xuất người dùng.
-        if (data && data.success === false && (data.error === 'Unauthorized' || data.code === 'UNAUTHORIZED')) {
+        const data = await apiPost('sessionVerify', { token });
+        if (!data || !data.success) {
             clearStoredToken();
             currentUser = null;
             currentPermissions = new Set();
             if (overlay) overlay.style.display = 'flex';
             return;
         }
-
-        if (!data || !data._session) {
-            throw new Error('SESSION_METADATA_MISSING');
-        }
-
-        setSessionFromServer(data._session, token);
+        setSessionFromServer(data, token);
         applyLoggedInUI();
-        processData(data);
-        toggleDemoBanner(false);
-        updateSyncStatusText(false);
+        if (overlay) overlay.style.display = 'none';
+        fetchDataFromGoogleSheets();
     } catch (error) {
-        console.error('Không khôi phục được phiên sau F5:', error);
-        // Giữ nguyên token để người dùng không bị đăng xuất chỉ vì mạng chập chờn hoặc server lỗi tạm thời.
-        // Hiện lại login để người dùng còn đường thao tác, nhưng không xóa phiên phía client.
+        console.error('Không xác minh được phiên đăng nhập:', error);
         if (overlay) overlay.style.display = 'flex';
-        showAuthError('Không khôi phục được phiên đăng nhập. Anh/chị thử F5 lại hoặc kiểm tra kết nối mạng.');
-    } finally {
-        setSyncing(false);
+        showAuthError('Không kết nối được máy chủ. Anh/chị kiểm tra mạng rồi thử lại.');
     }
 }
 
@@ -468,16 +441,18 @@ function getSortIndicatorHtml(column) {
 // ---- CẢNH BÁO TỒN KHO ----
 // Không áp ngưỡng chung cho toàn bộ ~1000 mã (mỗi loại vật tư có mức "bình thường" khác nhau, không thể dập khuôn).
 // Thay vào đó: chỉ những mã được anh chọn + nhập ngưỡng riêng trong tab "Cảnh báo tồn kho" mới được tô màu cảnh báo.
-// thresholdMap: { [mã vật tư]: ngưỡng cảnh báo } - build lại mỗi khi thresholdConfig thay đổi (load xong / thêm / xóa / lưu)
-let thresholdConfig = []; // [{ id, name, threshold }] - danh sách hiển thị trong tab cấu hình
+// thresholdMap: { [mã vật tư]: { min, max } } - build lại mỗi khi thresholdConfig thay đổi.
+// Min dùng cho cảnh báo sắp hết; Max dùng cho cảnh báo tồn vượt mức. Max được phép để trống.
+let thresholdConfig = []; // [{ id, name, threshold, maxThreshold }] - threshold = Min để tương thích code cũ
 let thresholdMap = {};    // tra cứu nhanh khi render bảng chính, key = mã vật tư
 
-// Lọc bảng theo trạng thái cảnh báo: null = không lọc, 'low' = đang bấm "Sắp Hết Hàng", 'out' = đang bấm "Hết Hàng"
+// Lọc bảng theo trạng thái cảnh báo: null = không lọc; 'low' = Sắp Hết Hàng; 'out' = Hết Hàng; 'high' = Vượt Mức.
 // Áp dụng được ở mọi tab (Dashboard Tổng lẫn từng danh mục con) - không dùng được ở tab Giá TB vì không có khái niệm tồn kho.
 let stockFilterMode = null;
 
 function toggleStockFilter(mode) {
-    const countEl = document.getElementById(mode === 'low' ? 'stat-low' : 'stat-out');
+    const countIdByMode = { low: 'stat-low', out: 'stat-out', high: 'stat-high' };
+    const countEl = document.getElementById(countIdByMode[mode] || '');
     const count = countEl ? parseInt(countEl.innerText, 10) || 0 : 0;
 
     if (stockFilterMode === mode) {
@@ -578,7 +553,12 @@ function activeTagsByGroupHasFilter() {
 
 function rebuildThresholdMap() {
     thresholdMap = {};
-    thresholdConfig.forEach(t => { thresholdMap[t.id] = t.threshold; });
+    thresholdConfig.forEach(t => {
+        thresholdMap[t.id] = {
+            min: Number(t.threshold) || 0,
+            max: t.maxThreshold === null || t.maxThreshold === undefined || t.maxThreshold === '' ? null : Number(t.maxThreshold)
+        };
+    });
 
     syncGhostRows();
 
@@ -621,17 +601,19 @@ function syncGhostRows() {
 }
 
 function getStockStatus(item) {
-    const threshold = thresholdMap[item.id];
-    if (threshold === undefined) return 'normal'; // chưa cấu hình cảnh báo cho mã này -> không tô màu gì cả
+    const limits = thresholdMap[item.id];
+    if (limits === undefined) return 'normal'; // chưa cấu hình cảnh báo cho mã này -> không tô màu gì cả
     if (item.stock <= 0) return 'out';
-    if (item.stock <= threshold) return 'low';
+    if (item.stock <= limits.min) return 'low';
+    if (limits.max !== null && Number.isFinite(limits.max) && item.stock >= limits.max) return 'high';
     return 'normal';
 }
 
 function getStockColorHex(status) {
     if (status === 'out') return '#e74c3c';   // đỏ - hết hàng
-    if (status === 'low') return '#f39c12';   // vàng cam - sắp hết
-    return 'var(--vh-blue)';                  // xanh dương - bình thường / chưa cấu hình cảnh báo
+    if (status === 'low') return '#f39c12';   // vàng cam - dưới Min
+    if (status === 'high') return '#ff3b9d';  // hồng tươi - từ ngưỡng Max trở lên
+    return '#111827';                         // đen - bình thường hoặc mã chưa cấu hình cảnh báo
 }
 
 // activeTagsByGroup (dùng cho hashtag lọc nhanh) được khai báo cùng khối code hashtag bên dưới
@@ -669,12 +651,12 @@ function bindStaticUiEvents() {
 
     on('stat-low-wrap', 'click', () => toggleStockFilter('low'));
     on('stat-out-wrap', 'click', () => toggleStockFilter('out'));
+    on('stat-high-wrap', 'click', () => toggleStockFilter('high'));
     on('searchInput', 'keyup', renderTable);
     on('btn-toggle-movement', 'click', toggleMovementColumns);
     on('btn-toggle-chart', 'click', toggleStockChart);
     on('btn-export-inventory', 'click', exportToExcel);
 
-    on('btn-close-threshold', 'click', closeThresholdConfigPanel);
     on('thresholdSearchInput', 'input', renderThresholdSuggestions);
     on('btn-add-threshold', 'click', addThresholdItem);
     on('btn-toggle-manual-threshold', 'click', event => {
@@ -691,7 +673,6 @@ function bindStaticUiEvents() {
     on('btn-save-threshold', 'click', saveThresholdConfig);
     on('btn-save-stagnant', 'click', saveStagnantMonths);
 
-    on('btn-close-stagnant', 'click', closeStagnantPanel);
     on('btn-close-accounts', 'click', closeAccountsPanel);
     on('admin-tab-users', 'click', () => switchAdminSection('users'));
     on('admin-tab-permissions', 'click', () => switchAdminSection('permissions'));
@@ -702,7 +683,6 @@ function bindStaticUiEvents() {
     on('accountsTableHead', 'click', toggleAccountHeaderSort);
     on('accountsTableBody', 'change', handleAccountTableChange);
     on('btn-save-role-permissions', 'click', saveRolePermissions);
-    on('btn-close-reorder', 'click', closeReorderPanel);
     on('btn-export-reorder', 'click', exportReorderList);
 
     on('btn-close-friendly-alert', 'click', closeFriendlyAlert);
@@ -878,6 +858,8 @@ function processData(data) {
         const raw = thresholdsFromServer[id];
         const isObjectFormat = raw !== null && typeof raw === 'object';
         const threshold = Number(isObjectFormat ? raw.threshold : raw) || 0;
+        const maxRaw = isObjectFormat ? raw.maxThreshold : null;
+        const maxThreshold = maxRaw === null || maxRaw === undefined || maxRaw === '' ? null : Number(maxRaw);
         // QUAN TRỌNG: loại trừ sheet "Giá TB" khỏi việc tìm "dữ liệu thật" - lý do y hệt syncGhostRows() bên dưới:
         // mọi mã đều có 1 dòng giá bên Giá TB, nếu không loại trừ thì mã đang hết hàng/ẩn ở danh mục thật
         // (VD Thép Tấm) sẽ luôn bị "tìm thấy" nhầm qua dòng Giá TB, khiến danh mục anh đã cấu hình bị Giá TB
@@ -892,7 +874,8 @@ function processData(data) {
             name: matchedItem ? matchedItem.name : (isObjectFormat && raw.name) || '(mã đã ẩn khỏi bảng tồn kho - có thể do hết hàng)',
             sheet: matchedItem ? matchedItem.sheet : (isObjectFormat ? raw.sheet : null) || null,
             unit: matchedItem ? matchedItem.unit : (isObjectFormat ? raw.unit : '') || '',
-            threshold: threshold
+            threshold: threshold,
+            maxThreshold: Number.isFinite(maxThreshold) ? maxThreshold : null
         };
     });
     rebuildThresholdMap(); // hàm này giờ tự gọi kèm syncGhostRows() để dựng "dòng ảo" luôn, không cần lặp code ở đây nữa
@@ -937,6 +920,7 @@ function renderCategoryTabs(sheetNames) {
     if (hasPermission('VIEW_DASHBOARD')) {
         const allBtn = document.createElement('button');
         allBtn.className = 'nav-tab-btn';
+        allBtn.dataset.category = 'ALL';
         allBtn.innerText = '📊 Dashboard Tổng';
         allBtn.onclick = function () { filterCategory('ALL', allBtn); };
         container.appendChild(allBtn);
@@ -948,6 +932,7 @@ function renderCategoryTabs(sheetNames) {
         if (!allowed) return;
         const btn = document.createElement('button');
         btn.className = 'nav-tab-btn';
+        btn.dataset.category = name;
         btn.innerText = name;
         btn.onclick = function () { filterCategory(name, btn); };
         container.appendChild(btn);
@@ -969,6 +954,9 @@ function renderCategoryTabs(sheetNames) {
 }
 
 function filterCategory(category, btnElement) {
+    // Bấm bất kỳ tab danh mục nào thì quay thẳng về bảng tồn kho và tắt trạng thái sáng
+    // của các tab chức năng Cảnh báo / Cần đặt hàng / Hàng tồn đọng.
+    showOnlyPanel('inventory-panel');
     currentCategory = category;
     activeTagsByGroup = {}; // đổi tab thì bỏ toàn bộ hashtag đang lọc của tab cũ
     stockFilterMode = null; // đổi tab thì cũng bỏ luôn bộ lọc cảnh báo tồn kho của tab cũ
@@ -1392,41 +1380,50 @@ function renderTable() {
     lastRenderedIsPriceView = isPriceView;
 }
 
-// Cập nhật 2 ô thống kê "Sắp hết hàng" / "Hết hàng" theo đúng dữ liệu đang hiển thị (đã lọc theo tab/tìm kiếm/hashtag).
-// Tab "Giá TB" không có khái niệm tồn kho nên ẩn hẳn 2 ô này đi.
+// Cập nhật 3 ô cảnh báo Min / Hết hàng / Max theo đúng dữ liệu đang hiển thị (đã lọc theo tab/tìm kiếm/hashtag).
+// Tab "Giá TB" không có khái niệm tồn kho nên ẩn cả 3 ô này đi.
 function updateStockWarningStats(items, isPriceView) {
     const lowWrap = document.getElementById('stat-low-wrap');
     const outWrap = document.getElementById('stat-out-wrap');
-    if (!lowWrap || !outWrap) return;
+    const highWrap = document.getElementById('stat-high-wrap');
+    if (!lowWrap || !outWrap || !highWrap) return;
 
     if (isPriceView) {
         lowWrap.style.display = 'none';
         outWrap.style.display = 'none';
+        highWrap.style.display = 'none';
         return;
     }
 
     let lowCount = 0;
     let outCount = 0;
+    let highCount = 0;
     items.forEach(item => {
         const status = getStockStatus(item);
         if (status === 'low') lowCount++;
         else if (status === 'out') outCount++;
+        else if (status === 'high') highCount++;
     });
 
     document.getElementById('stat-low').innerText = lowCount;
     document.getElementById('stat-out').innerText = outCount;
+    document.getElementById('stat-high').innerText = highCount;
     lowWrap.style.display = '';
     outWrap.style.display = '';
+    highWrap.style.display = '';
 
     // Bấm được (đổi con trỏ + hover) chỉ khi count > 0; bằng 0 thì làm mờ nhẹ, bấm không có tác dụng
     lowWrap.classList.toggle('clickable', lowCount > 0);
     lowWrap.classList.toggle('not-clickable', lowCount === 0);
     outWrap.classList.toggle('clickable', outCount > 0);
     outWrap.classList.toggle('not-clickable', outCount === 0);
+    highWrap.classList.toggle('clickable', highCount > 0);
+    highWrap.classList.toggle('not-clickable', highCount === 0);
 
-    // Tô đậm ô đang được dùng để lọc bảng
+    // Tô đậm ô đang được dùng để lọc bảng. Mỗi thời điểm chỉ có một trạng thái được lọc.
     lowWrap.classList.toggle('active-filter', stockFilterMode === 'low');
     outWrap.classList.toggle('active-filter', stockFilterMode === 'out');
+    highWrap.classList.toggle('active-filter', stockFilterMode === 'high');
 }
 
 // Xuất đúng dữ liệu ĐANG HIỂN THỊ trên bảng (đã áp dụng tab/tìm kiếm/hashtag/sắp xếp) ra file Excel thật (.xlsx)
@@ -1488,10 +1485,31 @@ let pendingThresholdItem = null; // mã vật tư đang được chọn từ ô 
 // Danh sách toàn bộ panel cấp cao trong app - dùng để ẩn hết rồi chỉ hiện đúng 1 panel cần xem
 const ALL_PANEL_IDS = ['inventory-panel', 'threshold-config-panel', 'reorder-panel', 'accounts-panel', 'stagnant-panel'];
 
+// Hiển thị đúng một panel và đồng bộ trạng thái sáng của 3 tab chức năng phía trên.
+// Làm như vậy để người dùng luôn biết mình đang đứng ở màn nào và có thể chuyển thẳng bằng tab,
+// không cần thêm nút "Quay lại" trong từng panel.
 function showOnlyPanel(panelIdToShow) {
     ALL_PANEL_IDS.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.style.display = (id === panelIdToShow) ? 'block' : 'none';
+    });
+
+    const panelButtonMap = {
+        'threshold-config-panel': 'btn-open-threshold',
+        'reorder-panel': 'btn-open-reorder',
+        'stagnant-panel': 'btn-open-stagnant'
+    };
+    ['btn-open-threshold', 'btn-open-reorder', 'btn-open-stagnant'].forEach(id => {
+        const btn = document.getElementById(id);
+        if (btn) btn.classList.toggle('active', panelButtonMap[panelIdToShow] === id);
+    });
+
+    // Hai hàng nút cùng đóng vai trò điều hướng màn hình nên tại một thời điểm chỉ để 1 tab sáng.
+    // Khi mở Cảnh báo/Cần đặt/Hàng tồn đọng/Quản lý, bỏ sáng tab danh mục; khi quay lại bảng tồn kho,
+    // khôi phục đúng danh mục đang xem để người dùng không mất ngữ cảnh.
+    document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+        const shouldBeActive = panelIdToShow === 'inventory-panel' && btn.dataset.category === currentCategory;
+        btn.classList.toggle('active', shouldBeActive);
     });
 }
 
@@ -1822,7 +1840,7 @@ function renderAccountsTable() {
         const rowStyle = acc.status === 'pending_approval' ? ' style="background:#fff8ec;"' : '';
         return `<tr data-user-id="${escapeHtml(acc.userId)}"${rowStyle}>
             <td class="text-left font-bold">${escapeHtml(acc.userId)}</td>
-            <td class="text-left"><div class="company-id-editor"><input class="form-control account-company-id-input" maxlength="40" value="${escapeHtml(acc.companyId || '')}" placeholder="Mã ID công ty" style="min-width:120px;margin:0;"><span class="company-id-save-state" aria-live="polite"></span></div></td>
+            <td class="text-left"><div class="company-id-editor"><input class="form-control account-company-id-input" maxlength="40" value="${escapeHtml(acc.companyId || '')}" placeholder="Mã ID công ty" style="margin:0;"><span class="company-id-save-state" aria-live="polite"></span></div></td>
             <td class="text-left">${escapeHtml(acc.name || '-')}</td>
             <td class="text-left">${escapeHtml(acc.email)}</td>
             <td class="text-left">${escapeHtml(acc.department || '-')}</td>
@@ -2119,14 +2137,25 @@ function addThresholdItem() {
     }
 
     const thresholdVal = parseFloat(document.getElementById('thresholdValueInput').value);
+    const maxInput = document.getElementById('thresholdMaxValueInput').value.trim();
+    const maxThresholdVal = maxInput === '' ? null : parseFloat(maxInput);
     if (isNaN(thresholdVal) || thresholdVal < 0) {
-        showAlert('Anh nhập ngưỡng cảnh báo là 1 số >= 0 nhé.', 'error');
+        showAlert('Anh nhập Min là 1 số >= 0 nhé.', 'error');
+        return;
+    }
+    if (maxThresholdVal !== null && (isNaN(maxThresholdVal) || maxThresholdVal < 0)) {
+        showAlert('Max phải là 1 số >= 0 hoặc để trống nhé anh.', 'error');
+        return;
+    }
+    if (maxThresholdVal !== null && maxThresholdVal < thresholdVal) {
+        showAlert('Max phải lớn hơn hoặc bằng Min nhé anh.', 'error');
         return;
     }
 
     const existing = thresholdConfig.find(t => t.id === pendingThresholdItem.id);
     if (existing) {
-        existing.threshold = thresholdVal; // đã có rồi thì cập nhật lại ngưỡng mới
+        existing.threshold = thresholdVal; // Min
+        existing.maxThreshold = maxThresholdVal; // Max có thể để trống
         existing.name = pendingThresholdItem.name; // cập nhật lại tên/danh mục/đvt mới nhất luôn, phòng khi trước đó lưu bị thiếu
         existing.sheet = pendingThresholdItem.sheet;
         existing.unit = pendingThresholdItem.unit;
@@ -2137,12 +2166,14 @@ function addThresholdItem() {
             name: pendingThresholdItem.name,
             sheet: pendingThresholdItem.sheet,
             unit: pendingThresholdItem.unit,
-            threshold: thresholdVal
+            threshold: thresholdVal,
+            maxThreshold: maxThresholdVal
         });
     }
 
     document.getElementById('thresholdSearchInput').value = '';
     document.getElementById('thresholdValueInput').value = '';
+    document.getElementById('thresholdMaxValueInput').value = '';
     pendingThresholdItem = null;
     hideManualThresholdForm();
 
@@ -2220,7 +2251,7 @@ function renderThresholdConfigTable() {
         const emptyMsg = thresholdConfig.length === 0
             ? 'Chưa có mã vật tư nào được cấu hình cảnh báo. Anh tìm và thêm mã ở ô phía trên nhé.'
             : `Không có mã nào thuộc danh mục "${escapeHtml(thresholdCategoryFilter)}" trong danh sách cảnh báo.`;
-        tbody.innerHTML = `<tr><td colspan="5" style="color:#94a3b8; padding:16px;">${emptyMsg}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="color:#94a3b8; padding:16px;">${emptyMsg}</td></tr>`;
         applyThresholdPermissionUI();
         return;
     }
@@ -2238,7 +2269,13 @@ function renderThresholdConfigTable() {
             <td>
                 <input type="number" min="0" class="form-control threshold-inline-input"
                     value="${escapeHtml(t.threshold)}"
-                    onchange="updateThresholdValue('${safeIdAttr}', this.value)">
+                    onchange="updateThresholdValue('${safeIdAttr}', 'min', this.value)">
+            </td>
+            <td>
+                <input type="number" min="0" class="form-control threshold-inline-input"
+                    value="${t.maxThreshold === null || t.maxThreshold === undefined ? '' : escapeHtml(t.maxThreshold)}"
+                    placeholder="Không giới hạn"
+                    onchange="updateThresholdValue('${safeIdAttr}', 'max', this.value)">
             </td>
             <td><button type="button" class="btn-refresh" onclick="toggleMarkForDelete('${safeIdAttr}')">${btnLabel}</button></td>
         </tr>
@@ -2250,16 +2287,39 @@ function renderThresholdConfigTable() {
 
 // Cho phép sửa thẳng số ngưỡng ngay trong bảng cấu hình - khỏi phải tìm/chọn lại mã từ ô tìm kiếm phía trên
 // chỉ để đổi 1 con số. onchange chỉ chạy khi rời khỏi ô (blur/Enter) nên không bị mất focus lúc đang gõ dở.
-function updateThresholdValue(id, rawValue) {
+function updateThresholdValue(id, kind, rawValue) {
     if (!canEditThresholds()) { renderThresholdConfigTable(); return; }
-    const val = parseFloat(rawValue);
-    if (isNaN(val) || val < 0) {
-        showAlert('Ngưỡng cảnh báo phải là số >= 0 nhé anh.', 'error');
-        renderThresholdConfigTable(); // nhập sai thì trả ô input về giá trị cũ, tránh lưu nhầm giá trị rác
+    const target = thresholdConfig.find(t => t.id === id);
+    if (!target) return;
+
+    if (kind === 'max' && String(rawValue).trim() === '') {
+        target.maxThreshold = null;
+        rebuildThresholdMap();
         return;
     }
-    const target = thresholdConfig.find(t => t.id === id);
-    if (target) target.threshold = val;
+
+    const val = parseFloat(rawValue);
+    if (isNaN(val) || val < 0) {
+        showAlert((kind === 'max' ? 'Max' : 'Min') + ' phải là số >= 0 nhé anh.', 'error');
+        renderThresholdConfigTable();
+        return;
+    }
+
+    if (kind === 'max') {
+        if (val < Number(target.threshold || 0)) {
+            showAlert('Max phải lớn hơn hoặc bằng Min nhé anh.', 'error');
+            renderThresholdConfigTable();
+            return;
+        }
+        target.maxThreshold = val;
+    } else {
+        if (target.maxThreshold !== null && target.maxThreshold !== undefined && Number(target.maxThreshold) < val) {
+            showAlert('Min không được lớn hơn Max nhé anh.', 'error');
+            renderThresholdConfigTable();
+            return;
+        }
+        target.threshold = val;
+    }
     rebuildThresholdMap();
 }
 
@@ -2280,7 +2340,7 @@ function getReorderList() {
             if (!item) return null; // mã đã cấu hình nhưng không còn thấy trong tồn kho hiện tại (VD đổi mã/xóa mã bên Sheet)
 
             const status = getStockStatus(item);
-            if (status === 'normal') return null; // vẫn đủ hàng thì không cần đưa vào danh sách
+            if (status !== 'low' && status !== 'out') return null; // Max/vượt mức không phải nhu cầu đặt hàng
 
             // Gợi ý đơn giản: đặt thêm đủ để tồn kho quay lại mức gấp đôi ngưỡng cảnh báo -
             // không dựa trên tốc độ tiêu thụ thực tế vì dữ liệu hiện tại chỉ là số liệu 1 kỳ, chưa đủ để tính xu hướng.
@@ -2398,7 +2458,14 @@ function saveThresholdConfig() {
             action: 'saveThresholds',
             // Gửi kèm tên/danh mục/đvt (không chỉ mã + ngưỡng) - để nếu sau này kế toán ẩn dòng mã này khỏi
             // Sheet gốc (tồn = 0), Apps Script vẫn lưu lại đủ thông tin cho app dựng lại đúng "dòng ảo".
-            thresholds: thresholdConfig.map(t => ({ id: t.id, threshold: t.threshold, name: t.name, sheet: t.sheet, unit: t.unit })),
+            thresholds: thresholdConfig.map(t => ({
+                id: t.id,
+                threshold: t.threshold,
+                maxThreshold: t.maxThreshold,
+                name: t.name,
+                sheet: t.sheet,
+                unit: t.unit
+            })),
             token: currentUser.token
         })
     })
