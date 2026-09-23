@@ -86,27 +86,48 @@ function hasPermission(key) {
 async function checkLoginSession() {
     const token = getStoredToken();
     const overlay = document.getElementById('login-overlay');
+
     if (!token) {
         if (overlay) overlay.style.display = 'flex';
         return;
     }
+
     try {
-        const data = await apiPost('sessionVerify', { token });
-        if (!data || !data.success) {
+        // Sau F5, không gọi action POST riêng để khôi phục phiên nữa. Chính API GET dữ liệu đã bắt buộc
+        // xác minh token ở server và trả kèm _session, nên dùng cùng một request vừa xác thực phiên vừa
+        // tải lại dữ liệu. Cách này tránh lỗi client gọi action sessionVerify không khớp router Apps Script,
+        // đồng thời F5 chỉ thực hiện đúng việc người dùng mong đợi: xác minh phiên còn hạn + nạp lại dữ liệu.
+        const response = await fetch(GAS_API_URL + '?token=' + encodeURIComponent(token), { cache: 'no-store' });
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        const data = await response.json();
+
+        if (data && data.success === false && (data.error === 'Unauthorized' || data.code === 'UNAUTHORIZED')) {
             clearStoredToken();
             currentUser = null;
             currentPermissions = new Set();
             if (overlay) overlay.style.display = 'flex';
             return;
         }
-        setSessionFromServer(data, token);
+
+        // Backend phải trả _session lấy từ token đã xác minh. Không tin profile/role cũ trong trình duyệt.
+        if (!data || !data._session) {
+            throw new Error('SESSION_INFO_MISSING');
+        }
+
+        setSessionFromServer(data._session, token);
         applyLoggedInUI();
         if (overlay) overlay.style.display = 'none';
-        fetchDataFromGoogleSheets();
+
+        // Request khôi phục phiên đã mang luôn dữ liệu tồn kho về, xử lý ngay để không gọi API lần hai.
+        processData(data);
+        toggleDemoBanner(false);
+        updateSyncStatusText(false);
     } catch (error) {
-        console.error('Không xác minh được phiên đăng nhập:', error);
+        console.error('Không khôi phục được phiên đăng nhập:', error);
+        // Không xóa token chỉ vì lỗi mạng tạm thời. Nếu server xác nhận Unauthorized ở trên mới xóa.
+        // Nhờ vậy F5 khi mạng chập chờn không tự biến thành một lần đăng xuất ngoài ý muốn.
         if (overlay) overlay.style.display = 'flex';
-        showAuthError('Không kết nối được máy chủ. Anh/chị kiểm tra mạng rồi thử lại.');
+        showAuthError('Không kết nối được máy chủ để khôi phục phiên. Anh/chị thử F5 lại sau ít giây.');
     }
 }
 
