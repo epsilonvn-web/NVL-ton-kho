@@ -198,6 +198,7 @@
         .stat-bar-icon { font-size: 19px; line-height: 1; }
         .stat-bar.warning { border-left-color: var(--warning); background: linear-gradient(135deg, #fff 60%, #fff8ec 100%); }
         .stat-bar.danger { border-left-color: var(--danger); background: linear-gradient(135deg, #fff 60%, #fef0ef 100%); }
+        .stat-bar.high { border-left-color: #8e44ad; background: linear-gradient(135deg, #fff 60%, #f7f0fb 100%); }
         .stat-bar.clickable { cursor: pointer; transition: 0.2s ease; }
         .stat-bar.clickable:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .stat-bar.not-clickable { cursor: default; opacity: 0.6; }
@@ -205,6 +206,8 @@
         .stat-bar.warning.active-filter .stat-bar-label, .stat-bar.warning.active-filter .stat-bar-num { color: #fff !important; }
         .stat-bar.danger.active-filter { background: var(--danger); }
         .stat-bar.danger.active-filter .stat-bar-label, .stat-bar.danger.active-filter .stat-bar-num { color: #fff !important; }
+        .stat-bar.high.active-filter { background: #8e44ad; }
+        .stat-bar.high.active-filter .stat-bar-label, .stat-bar.high.active-filter .stat-bar-num { color: #fff !important; }
         .stat-bar-label { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; white-space: nowrap; }
         .stat-bar-num { font-size: 18px; font-weight: 800; color: var(--vh-dark); }
         .stat-bar-group { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
@@ -330,7 +333,19 @@
         .account-sort-btn:hover { color:#0f6ea8; }
         .account-sort-icon { display:inline-flex; min-width:13px; justify-content:center; color:#94a3b8; font-size:11px; }
         .account-sort-btn.active .account-sort-icon { color:#0f6ea8; }
-        .account-role-select,.account-status-select { font-weight:800; border-width:1.5px; }
+        /* Cân lại bề rộng bảng tài khoản: thu gọn mã ID công ty để ưu tiên các trường đọc/chỉnh nhiều. */
+        #accounts-table-wrap table { width:100%; table-layout:fixed; }
+        #accounts-table-wrap th:nth-child(1), #accounts-table-wrap td:nth-child(1) { width:8%; }
+        #accounts-table-wrap th:nth-child(2), #accounts-table-wrap td:nth-child(2) { width:10%; }
+        #accounts-table-wrap th:nth-child(3), #accounts-table-wrap td:nth-child(3) { width:16%; }
+        #accounts-table-wrap th:nth-child(4), #accounts-table-wrap td:nth-child(4) { width:18%; }
+        #accounts-table-wrap th:nth-child(5), #accounts-table-wrap td:nth-child(5) { width:12%; }
+        #accounts-table-wrap th:nth-child(6), #accounts-table-wrap td:nth-child(6) { width:13%; }
+        #accounts-table-wrap th:nth-child(7), #accounts-table-wrap td:nth-child(7) { width:13%; }
+        #accounts-table-wrap th:nth-child(8), #accounts-table-wrap td:nth-child(8) { width:10%; }
+        #accounts-table-wrap td { overflow-wrap:anywhere; }
+        #accounts-table-wrap .account-company-id-input { min-width:0 !important; width:100%; }
+        .account-role-select,.account-status-select { font-weight:400; border-width:1.5px; }
         .account-role-admin { background:#f3e8ff !important; color:#6b21a8 !important; border-color:#d8b4fe !important; }
         .account-role-mua_hang { background:#e0f2fe !important; color:#075985 !important; border-color:#7dd3fc !important; }
         .account-role-ke_hoach { background:#fff7ed !important; color:#9a3412 !important; border-color:#fdba74 !important; }
@@ -493,6 +508,11 @@
                 <span class="stat-bar-label">Hết Hàng</span>
                 <span class="stat-bar-num" id="stat-out" style="color:var(--danger);">0</span>
             </div>
+            <div class="stat-bar high" id="stat-high-wrap">
+                <span class="stat-bar-icon">⬆️</span>
+                <span class="stat-bar-label">Vượt Mức</span>
+                <span class="stat-bar-num" id="stat-high" style="color:#8e44ad;">0</span>
+            </div>
         </div>
 
         <!-- MAIN PANEL -->
@@ -532,12 +552,11 @@
         <div class="panel" id="threshold-config-panel" style="display:none;">
             <h3 class="panel-title">
                 <span>⚙️ Cấu Hình Cảnh Báo Tồn Kho</span>
-                <button type="button" class="btn-refresh" id="btn-close-threshold">← Quay lại danh sách tồn kho</button>
             </h3>
 
             <p style="color:#64748b; font-size:13px; margin-top:-10px; margin-bottom:18px;">
-                Chỉ những mã vật tư anh chọn ở đây mới được tô màu cảnh báo "sắp hết/hết hàng" ở các tab tồn kho -
-                các mã khác sẽ không bị cảnh báo, để tránh dập khuôn 1 ngưỡng chung cho mọi loại vật tư.
+                Chỉ những mã vật tư anh chọn ở đây mới được áp dụng cảnh báo Min/Max ở các tab tồn kho.
+                Min dùng để cảnh báo sắp hết; Max dùng để cảnh báo tồn vượt mức. Các mã khác sẽ không bị cảnh báo.
             </p>
 
             <div class="threshold-add-row">
@@ -545,7 +564,8 @@
                     <input type="text" id="thresholdSearchInput" class="form-control" placeholder="Gõ mã hoặc tên vật tư để tìm..."  autocomplete="off">
                     <div id="thresholdSuggestions" class="threshold-suggestions"></div>
                 </div>
-                <input type="number" id="thresholdValueInput" class="form-control threshold-value-input" placeholder="Ngưỡng cảnh báo" min="0">
+                <input type="number" id="thresholdValueInput" class="form-control threshold-value-input" placeholder="Min" min="0">
+                <input type="number" id="thresholdMaxValueInput" class="form-control threshold-value-input" placeholder="Max (không bắt buộc)" min="0">
                 <button type="button" class="btn-export" id="btn-add-threshold">+ Thêm</button>
             </div>
 
@@ -567,7 +587,7 @@
             </div>
 
             <p id="manualThresholdHint" style="display:none; color:#64748b; font-size:12.5px; margin-top:8px;">
-                ✅ Đã chọn mã thủ công - anh nhập ngưỡng cảnh báo vào ô phía trên rồi bấm "+ Thêm" như bình thường.
+                ✅ Đã chọn mã thủ công - anh nhập Min và Max (Max có thể để trống) ở phía trên rồi bấm "+ Thêm" như bình thường.
             </p>
 
             <div style="display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;">
@@ -584,7 +604,8 @@
                             <th class="text-left sortable" id="threshold-sort-id">Mã Vật Tư <span id="thresholdSortArrow_id" class="sort-arrow sort-arrow-inactive">↕</span></th>
                             <th class="text-left sortable" id="threshold-sort-name">Tên Vật Tư <span id="thresholdSortArrow_name" class="sort-arrow sort-arrow-inactive">↕</span></th>
                             <th class="text-left">Danh Mục</th>
-                            <th>Ngưỡng Cảnh Báo</th>
+                            <th>Min</th>
+                            <th>Max</th>
                             <th>Xóa</th>
                         </tr>
                     </thead>
@@ -624,7 +645,6 @@
         <div class="panel" id="stagnant-panel" style="display:none;">
             <h3 class="panel-title">
                 <span>📦 Hàng Tồn Đọng</span>
-                <button type="button" class="btn-refresh" id="btn-close-stagnant">← Quay lại danh sách tồn kho</button>
             </h3>
             <div id="stagnant-content"><!-- Dữ liệu JS --></div>
         </div>
@@ -691,7 +711,6 @@
         <div class="panel" id="reorder-panel" style="display:none;">
             <h3 class="panel-title">
                 <span>🛒 Danh Sách Cần Đặt Hàng Lại</span>
-                <button type="button" class="btn-refresh" id="btn-close-reorder">← Quay lại danh sách tồn kho</button>
             </h3>
 
             <p style="color:#64748b; font-size:13px; margin-top:-10px; margin-bottom:4px;">
@@ -757,7 +776,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260923-auth-v2-approval"></script>
+    <script src="assets/js/app.js?v=20260923-minmax2"></script>
 
 </body>
 </html>
