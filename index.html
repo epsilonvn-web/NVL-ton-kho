@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>VHIP - Quản lý NVL</title>
+    <title>Quản lý NVL</title>
 
     <!-- KHAI BÁO PWA: cho phép cài app ra màn hình chính, mở lên không có thanh địa chỉ trình duyệt -->
     <link rel="manifest" href="manifest.json">
@@ -198,7 +198,7 @@
         .stat-bar-icon { font-size: 19px; line-height: 1; }
         .stat-bar.warning { border-left-color: var(--warning); background: linear-gradient(135deg, #fff 60%, #fff8ec 100%); }
         .stat-bar.danger { border-left-color: var(--danger); background: linear-gradient(135deg, #fff 60%, #fef0ef 100%); }
-        .stat-bar.high { border-left-color: #8e44ad; background: linear-gradient(135deg, #fff 60%, #f7f0fb 100%); }
+        .stat-bar.high { border-left-color: #ff3b9d; background: linear-gradient(135deg, #fff 60%, #fff0f7 100%); }
         .stat-bar.clickable { cursor: pointer; transition: 0.2s ease; }
         .stat-bar.clickable:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .stat-bar.not-clickable { cursor: default; opacity: 0.6; }
@@ -206,7 +206,7 @@
         .stat-bar.warning.active-filter .stat-bar-label, .stat-bar.warning.active-filter .stat-bar-num { color: #fff !important; }
         .stat-bar.danger.active-filter { background: var(--danger); }
         .stat-bar.danger.active-filter .stat-bar-label, .stat-bar.danger.active-filter .stat-bar-num { color: #fff !important; }
-        .stat-bar.high.active-filter { background: #8e44ad; }
+        .stat-bar.high.active-filter { background: #ff3b9d; }
         .stat-bar.high.active-filter .stat-bar-label, .stat-bar.high.active-filter .stat-bar-num { color: #fff !important; }
         .stat-bar-label { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; white-space: nowrap; }
         .stat-bar-num { font-size: 18px; font-weight: 800; color: var(--vh-dark); }
@@ -375,7 +375,7 @@
     <div id="login-overlay">
         <div class="login-card">
             <div class="login-logo"><img src="logo.jpg" alt="Logo Vĩnh Hưng"></div>
-            <h2>VHIP - Quản Lý NVL</h2>
+            <h2>Quản Lý NVL</h2>
             <div class="login-sub" id="auth-subtitle">Đăng nhập để tiếp tục</div>
 
             <div class="auth-tab-switch">
@@ -511,7 +511,7 @@
             <div class="stat-bar high" id="stat-high-wrap">
                 <span class="stat-bar-icon">⬆️</span>
                 <span class="stat-bar-label">Vượt Mức</span>
-                <span class="stat-bar-num" id="stat-high" style="color:#8e44ad;">0</span>
+                <span class="stat-bar-num" id="stat-high" style="color:#ff3b9d;">0</span>
             </div>
         </div>
 
@@ -776,7 +776,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260923-minmax2"></script>
+    <script src="assets/js/app.js?v=20260923-pinkmax2"></script>
 
 </body>
 </html>
