@@ -92,15 +92,23 @@ async function checkLoginSession() {
         return;
     }
 
+    // Khi F5, không gọi action riêng chỉ để kiểm tra phiên nữa. Chính API GET dữ liệu đã bắt buộc
+    // xác minh token ở server và đồng thời trả _session mới nhất. Cách này vừa ít request hơn, vừa tránh
+    // trường hợp frontend mới gọi sessionVerify nhưng bản Apps Script đang deploy chưa có action đó.
+    // Có token lưu từ lần đăng nhập trước thì tạm ẩn màn hình login để tránh nháy/văng về form login
+    // trong lúc server đang xác minh phiên.
+    if (overlay) overlay.style.display = 'none';
+    clearAuthError();
+    showLoadingState();
+    setSyncing(true);
+
     try {
-        // Sau F5, không gọi action POST riêng để khôi phục phiên nữa. Chính API GET dữ liệu đã bắt buộc
-        // xác minh token ở server và trả kèm _session, nên dùng cùng một request vừa xác thực phiên vừa
-        // tải lại dữ liệu. Cách này tránh lỗi client gọi action sessionVerify không khớp router Apps Script,
-        // đồng thời F5 chỉ thực hiện đúng việc người dùng mong đợi: xác minh phiên còn hạn + nạp lại dữ liệu.
         const response = await fetch(GAS_API_URL + '?token=' + encodeURIComponent(token), { cache: 'no-store' });
         if (!response.ok) throw new Error('HTTP ' + response.status);
         const data = await response.json();
 
+        // Chỉ xóa token khi server xác nhận token thực sự không còn hợp lệ. Lỗi mạng hay lỗi tạm thời
+        // không được tự ý đăng xuất người dùng.
         if (data && data.success === false && (data.error === 'Unauthorized' || data.code === 'UNAUTHORIZED')) {
             clearStoredToken();
             currentUser = null;
@@ -109,25 +117,23 @@ async function checkLoginSession() {
             return;
         }
 
-        // Backend phải trả _session lấy từ token đã xác minh. Không tin profile/role cũ trong trình duyệt.
         if (!data || !data._session) {
-            throw new Error('SESSION_INFO_MISSING');
+            throw new Error('SESSION_METADATA_MISSING');
         }
 
         setSessionFromServer(data._session, token);
         applyLoggedInUI();
-        if (overlay) overlay.style.display = 'none';
-
-        // Request khôi phục phiên đã mang luôn dữ liệu tồn kho về, xử lý ngay để không gọi API lần hai.
         processData(data);
         toggleDemoBanner(false);
         updateSyncStatusText(false);
     } catch (error) {
-        console.error('Không khôi phục được phiên đăng nhập:', error);
-        // Không xóa token chỉ vì lỗi mạng tạm thời. Nếu server xác nhận Unauthorized ở trên mới xóa.
-        // Nhờ vậy F5 khi mạng chập chờn không tự biến thành một lần đăng xuất ngoài ý muốn.
+        console.error('Không khôi phục được phiên sau F5:', error);
+        // Giữ nguyên token để người dùng không bị đăng xuất chỉ vì mạng chập chờn hoặc server lỗi tạm thời.
+        // Hiện lại login để người dùng còn đường thao tác, nhưng không xóa phiên phía client.
         if (overlay) overlay.style.display = 'flex';
-        showAuthError('Không kết nối được máy chủ để khôi phục phiên. Anh/chị thử F5 lại sau ít giây.');
+        showAuthError('Không khôi phục được phiên đăng nhập. Anh/chị thử F5 lại hoặc kiểm tra kết nối mạng.');
+    } finally {
+        setSyncing(false);
     }
 }
 
