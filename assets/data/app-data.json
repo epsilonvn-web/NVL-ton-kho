@@ -1,0 +1,285 @@
+{
+  "defaultCategory": "CAO SU",
+  "priceSheetNames": [
+    "GIÁ TB",
+    "GIA TB"
+  ],
+  "priceFieldAliases": [
+    "gia",
+    "giatb",
+    "giatrungbinh",
+    "price",
+    "dongia",
+    "gia_tb"
+  ],
+  "headerLikeIds": [
+    "mã vật tư",
+    "ma vat tu",
+    "id",
+    "stt"
+  ],
+  "roleLabels": {
+    "admin": "Admin",
+    "mua_hang": "Mua hàng",
+    "ke_hoach": "Kế hoạch",
+    "ban_lanh_dao": "Ban lãnh đạo",
+    "viewer": "Người xem",
+    "mua_hang_ke_hoach": "Kế hoạch - Mua hàng"
+  },
+  "roleOptions": [
+    {
+      "value": "admin",
+      "label": "Admin"
+    },
+    {
+      "value": "mua_hang",
+      "label": "Mua hàng"
+    },
+    {
+      "value": "ke_hoach",
+      "label": "Kế hoạch"
+    },
+    {
+      "value": "mua_hang_ke_hoach",
+      "label": "Kế hoạch - Mua hàng"
+    },
+    {
+      "value": "ban_lanh_dao",
+      "label": "Ban lãnh đạo"
+    },
+    {
+      "value": "viewer",
+      "label": "Người xem"
+    }
+  ],
+  "statusOptions": [
+    {
+      "value": "pending_approval",
+      "label": "Chờ duyệt"
+    },
+    {
+      "value": "active",
+      "label": "Hoạt động"
+    },
+    {
+      "value": "blocked",
+      "label": "Đã khóa"
+    }
+  ],
+  "demoData": {
+    "VẬT TƯ KHÁC": [
+      {
+        "id": "SHPEL0002",
+        "name": "Chất đóng rắn sơn Hempaprime Multi 500-95090",
+        "unit": "Lít",
+        "tonCuoi": 192.45
+      },
+      {
+        "id": "DRIN0410",
+        "name": "Đinh rút inox 4x10",
+        "unit": "Cái",
+        "tonCuoi": 9105
+      }
+    ],
+    "THÉP TẤM": [
+      {
+        "id": "TPQ345B20",
+        "name": "Thép tấm Q345B dày 20mm",
+        "unit": "Kg",
+        "tonCuoi": 15400
+      },
+      {
+        "id": "TSS40012",
+        "name": "Thép tấm SS400 dày 12mm",
+        "unit": "Kg",
+        "tonCuoi": 85000
+      }
+    ]
+  },
+  "tagConfig": {
+    "THÉP TẤM": {
+      "groups": [
+        {
+          "key": "grade",
+          "label": "Mác thép:",
+          "type": "auto-grade"
+        },
+        {
+          "key": "thickness",
+          "label": "Dày (mm):",
+          "type": "auto-thickness",
+          "extraValues": [
+            "30",
+            "35",
+            "36",
+            "40",
+            "45",
+            "50",
+            "55",
+            "60",
+            "70",
+            "80",
+            "90",
+            "100",
+            "115"
+          ]
+        }
+      ]
+    },
+    "CAO SU": {
+      "groups": [
+        {
+          "key": "loai",
+          "label": "Chủng loại:",
+          "type": "keywords",
+          "values": [
+            "Đĩa cao su",
+            "Máng cao su",
+            "Gioăng cao su",
+            "Ống cao su"
+          ]
+        },
+        {
+          "key": "mac",
+          "label": "Mác cao su:",
+          "type": "keywords",
+          "values": [
+            "NR",
+            "CR",
+            "EPDM",
+            "POM"
+          ]
+        }
+      ]
+    },
+    "THÉP KHÁC": {
+      "groups": [
+        {
+          "key": "loai",
+          "label": "Loại thép:",
+          "type": "keywords",
+          "values": [
+            "Thép góc",
+            "Thép hộp",
+            "Thép ray",
+            "Thép hình U",
+            "Chữ F",
+            "Chữ vương",
+            "Thép zam",
+            "Thép vằn",
+            "Thép tròn đặc",
+            "Thép tròn trơn",
+            "S45C",
+            "0.5",
+            "2.5"
+          ]
+        },
+        {
+          "key": "size",
+          "label": "Size:",
+          "type": "auto-v-size"
+        }
+      ]
+    },
+    "BULONG": {
+      "groups": [
+        {
+          "key": "strength",
+          "label": "Cấp bền:",
+          "type": "auto-bolt-strength"
+        },
+        {
+          "key": "diameter",
+          "label": "Size:",
+          "type": "auto-bolt-diameter"
+        }
+      ]
+    },
+    "TẤM TRƯỢT": {
+      "groups": [
+        {
+          "key": "material",
+          "label": "Vật liệu:",
+          "type": "keywords",
+          "values": [
+            "PTFE",
+            "UHMWPE",
+            "M-PTFE"
+          ]
+        },
+        {
+          "key": "diameter",
+          "label": "Đường kính:",
+          "type": "auto-diameter-d"
+        }
+      ]
+    },
+    "VTTH": {
+      "groups": [
+        {
+          "key": "firstWord",
+          "label": "Từ đầu:",
+          "type": "auto-first-word"
+        }
+      ]
+    },
+    "VẬT TƯ KHÁC": {
+      "groups": [
+        {
+          "key": "loai",
+          "label": "Loại:",
+          "type": "keywords",
+          "values": [
+            "Sơn",
+            "Dung môi",
+            "ALMG",
+            "Đinh hàn",
+            "Inox",
+            "Keo",
+            "Mỡ",
+            "Nhôm",
+            "Bông khoáng",
+            "Tấm chèn",
+            "Đồng",
+            "Thanh ren",
+            "Mica"
+          ]
+        }
+      ]
+    },
+    "GIÁ TB": {
+      "groups": [
+        {
+          "key": "loai",
+          "label": "Loại:",
+          "type": "keywords",
+          "values": [
+            "Bulong",
+            "Sơn",
+            "Cao su",
+            "Tấm trượt",
+            "Thép tròn",
+            "Thép tấm",
+            "A572",
+            "Q355",
+            "H125",
+            "H150"
+          ]
+        }
+      ]
+    }
+  },
+  "permissionLabels": {
+    "VIEW_DASHBOARD": "Xem Dashboard tổng",
+    "VIEW_INVENTORY": "Xem tồn kho",
+    "VIEW_PRICE": "Xem giá trung bình",
+    "VIEW_REORDER": "Xem Cần đặt hàng",
+    "VIEW_STAGNANT": "Xem Hàng tồn đọng",
+    "EDIT_THRESHOLDS": "Sửa cảnh báo tồn kho",
+    "EDIT_STAGNANT_CONFIG": "Sửa cấu hình hàng tồn đọng",
+    "EXPORT_INVENTORY": "Xuất Excel tồn kho",
+    "EXPORT_REORDER": "Xuất Excel cần đặt hàng",
+    "MANAGE_ACCOUNTS": "Quản lý tài khoản",
+    "MANAGE_ROLE_PERMISSIONS": "Quản lý ma trận phân quyền"
+  }
+}
