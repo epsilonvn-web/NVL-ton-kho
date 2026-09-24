@@ -516,7 +516,7 @@
         <div class="sync-status-bar">
             <span id="sync-status-text">🕒 Đang tải dữ liệu lần đầu...</span>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-                <button type="button" class="btn-refresh" id="btn-open-threshold">⚙️ Cảnh báo tồn kho</button>
+                <button type="button" class="btn-refresh" id="btn-open-threshold">⚠️ Cảnh báo tồn kho</button>
                 <button type="button" class="btn-refresh" id="btn-open-reorder">🛒 Cần Đặt Hàng</button>
                 <button type="button" class="btn-refresh" id="btn-open-stagnant">📦 Hàng Tồn Đọng</button>
                 <button type="button" class="btn-refresh" id="btn-refresh-data" >🔄 Làm mới dữ liệu</button>
@@ -590,53 +590,27 @@
             </div>
         </div>
 
-        <!-- PANEL CẤU HÌNH CẢNH BÁO TỒN KHO - ẩn mặc định, chỉ hiện khi bấm nút "⚙️ Cảnh báo tồn kho" -->
+        <!-- PANEL CẢNH BÁO TỒN KHO - Min/Max chỉ đọc, đồng bộ từ dữ liệu bộ phận Mua hàng -->
         <div class="panel" id="threshold-config-panel" style="display:none;">
             <h3 class="panel-title">
-                <span>⚙️ Cấu Hình Cảnh Báo Tồn Kho</span>
+                <span>⚠️ Cảnh Báo Tồn Kho</span>
             </h3>
 
-            <p style="color:#64748b; font-size:13px; margin-top:-10px; margin-bottom:18px;">
-                Chỉ những mã vật tư anh chọn ở đây mới được áp dụng cảnh báo Min/Max ở các tab tồn kho.
-                Min dùng để cảnh báo sắp hết; Max dùng để cảnh báo tồn vượt mức. Các mã khác sẽ không bị cảnh báo.
+            <p style="color:#64748b; font-size:13px; margin-top:-10px; margin-bottom:8px;">
+                Min/Max được đồng bộ tự động từ sheet <b>Canh_bao_ton_kho</b> do bộ phận Mua hàng quản lý.
+                Chương trình chỉ đọc và áp dụng cảnh báo; không chỉnh sửa Min/Max tại đây.
+            </p>
+            <p style="color:#94a3b8; font-size:12.5px; margin-top:0; margin-bottom:16px;">
+                Mã có cả Min và Max trống sẽ được bỏ qua. Có Min thì theo dõi Sắp hết/Hết hàng; có Max thì theo dõi Vượt mức.
+                Dữ liệu mới sẽ tự nhận ở lần mở chương trình hoặc bấm Làm mới dữ liệu tiếp theo.
             </p>
 
-            <div class="threshold-add-row">
-                <div class="threshold-search-wrap">
-                    <input type="text" id="thresholdSearchInput" class="form-control" placeholder="Gõ mã hoặc tên vật tư để tìm..."  autocomplete="off">
-                    <div id="thresholdSuggestions" class="threshold-suggestions"></div>
-                </div>
-                <input type="number" id="thresholdValueInput" class="form-control threshold-value-input" placeholder="Min" min="0">
-                <input type="number" id="thresholdMaxValueInput" class="form-control threshold-value-input" placeholder="Max (không bắt buộc)" min="0">
-                <button type="button" class="btn-export" id="btn-add-threshold">+ Thêm</button>
-            </div>
-
-            <div style="margin-top:8px;">
-                <a href="#" id="btn-toggle-manual-threshold" style="font-size:12.5px; color:var(--vh-blue); text-decoration:none;">
-                    Không tìm thấy mã cần thêm? Nhập thủ công mã mới (VD: mã quan trọng nhưng tồn = 0, kế toán chưa/không xuất hiện trong Sheet)
-                </a>
-            </div>
-
-            <!-- Form nhập thủ công - dùng khi mã cần cấu hình cảnh báo hoàn toàn KHÔNG có trong dữ liệu tải về
-                 (kế toán chưa từng nhập hoặc ẩn hẳn khỏi Sheet), nên không thể tìm ra để chọn như bình thường.
-                 Sau khi xác nhận, mã này coi như 1 "dòng ảo" luôn (tồn = 0) cho tới khi thật sự xuất hiện trong Sheet. -->
-            <div id="manualThresholdForm" class="threshold-add-row" style="display:none; margin-top:10px; padding:14px; background:#f8fafc; border-radius:8px; border:1px dashed var(--border-color);">
-                <input type="text" id="manualId" class="form-control" placeholder="Mã vật tư (bắt buộc - tự đặt tạm cũng được, VD: TAM-THEP60)" style="flex:1 1 220px;">
-                <input type="text" id="manualName" class="form-control" placeholder="Tên vật tư (bắt buộc)" style="flex:2 1 220px;">
-                <select id="manualSheet" class="form-control" style="flex:1 1 160px;"></select>
-                <input type="text" id="manualUnit" class="form-control" placeholder="Đvt (VD: Kg, Cái...)" style="flex:1 1 120px;">
-                <button type="button" class="btn-export" id="btn-confirm-manual-threshold">Xác nhận mã này</button>
-            </div>
-
-            <p id="manualThresholdHint" style="display:none; color:#64748b; font-size:12.5px; margin-top:8px;">
-                ✅ Đã chọn mã thủ công - anh nhập Min và Max (Max có thể để trống) ở phía trên rồi bấm "+ Thêm" như bình thường.
-            </p>
-
-            <div style="display:flex; align-items:center; gap:10px; margin-top:16px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap;">
                 <label for="thresholdCategoryFilterSelect" style="font-size:13px; color:#64748b; font-weight:600;">Lọc theo danh mục:</label>
-                <select id="thresholdCategoryFilterSelect" class="form-control" style="max-width:220px;" >
+                <select id="thresholdCategoryFilterSelect" class="form-control" style="max-width:220px;">
                     <option value="">Tất cả danh mục</option>
                 </select>
+                <span id="threshold-count-text" style="font-size:13px; color:#64748b;"></span>
             </div>
 
             <div class="table-responsive" style="margin-top:12px;">
@@ -646,27 +620,27 @@
                             <th class="text-left sortable" id="threshold-sort-id">Mã Vật Tư <span id="thresholdSortArrow_id" class="sort-arrow sort-arrow-inactive">↕</span></th>
                             <th class="text-left sortable" id="threshold-sort-name">Tên Vật Tư <span id="thresholdSortArrow_name" class="sort-arrow sort-arrow-inactive">↕</span></th>
                             <th class="text-left">Danh Mục</th>
+                            <th>ĐVT</th>
                             <th>Min</th>
                             <th>Max</th>
-                            <th>Xóa</th>
                         </tr>
                     </thead>
                     <tbody id="thresholdConfigTableBody">
-                        <!-- Dữ liệu JS -->
+                        <tr><td colspan="6" style="color:#94a3b8; padding:16px;">Đang tải dữ liệu cảnh báo...</td></tr>
                     </tbody>
                 </table>
             </div>
 
-            <div style="margin-top:20px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-                <button type="button" class="btn-export" id="btn-save-threshold" >💾 Lưu Lên Google Sheet</button>
-                <span id="thresholdSaveStatus" style="font-size:13px; color:#64748b;"></span>
-            </div>
+        </div>
 
-            <p id="threshold-no-permission-note" style="display:none; background:#eaf4fb; color:var(--vh-blue-dark); padding:10px 14px; border-radius:8px; font-size:12.5px; margin-top:12px;">
-                🔒 Tài khoản của anh/chị chỉ có quyền xem danh sách cảnh báo tồn kho, không chỉnh sửa được. Liên hệ bộ phận mua hàng hoặc quản trị viên nếu cần thay đổi.
-            </p>
+        <!-- PANEL HÀNG TỒN ĐỌNG - ẩn mặc định, chỉ hiện khi bấm nút "📦 Hàng Tồn Đọng" -->
+        <div class="panel" id="stagnant-panel" style="display:none;">
+            <h3 class="panel-title">
+                <span>📦 Hàng Tồn Đọng</span>
+            </h3>
+            <div id="stagnant-content"><!-- Dữ liệu JS --></div>
 
-            <!-- CẤU HÌNH NGƯỠNG "HÀNG ĐỌNG" - chỉ admin thấy, nằm cuối tab Cảnh báo tồn kho -->
+            <!-- CẤU HÌNH NGƯỠNG "HÀNG ĐỌNG" - giữ quyền chỉnh riêng, đặt đúng trong tab Hàng Tồn Đọng -->
             <div id="stagnant-config-box" style="display:none; margin-top:24px; padding:16px 18px; background:#f8fafc; border-radius:10px; border:1px solid var(--border-color);">
                 <div style="font-size:13.5px; font-weight:700; color:var(--vh-navy); margin-bottom:8px;">📦 Ngưỡng cảnh báo hàng tồn đọng</div>
                 <p style="font-size:12.5px; color:#64748b; margin:0 0 12px 0;">
@@ -681,14 +655,6 @@
                     <span id="stagnantSaveStatus" style="font-size:13px; color:#64748b;"></span>
                 </div>
             </div>
-        </div>
-
-        <!-- PANEL HÀNG TỒN ĐỌNG - ẩn mặc định, chỉ hiện khi bấm nút "📦 Hàng Tồn Đọng" -->
-        <div class="panel" id="stagnant-panel" style="display:none;">
-            <h3 class="panel-title">
-                <span>📦 Hàng Tồn Đọng</span>
-            </h3>
-            <div id="stagnant-content"><!-- Dữ liệu JS --></div>
         </div>
 
         <!-- PANEL QUẢN LÝ TÀI KHOẢN / PHÂN QUYỀN - Admin -->
@@ -756,7 +722,7 @@
             </h3>
 
             <p style="color:#64748b; font-size:13px; margin-top:-10px; margin-bottom:4px;">
-                Chỉ tính các mã đã được cấu hình ngưỡng cảnh báo (ở tab "⚙️ Cảnh báo tồn kho") và hiện đang ở dưới ngưỡng đó.
+                Chỉ tính các mã có Min trong dữ liệu cảnh báo do bộ phận Mua hàng quản lý và hiện đang ở mức Sắp hết / Hết hàng.
             </p>
             <p style="color:#94a3b8; font-size:12px; margin-top:0; margin-bottom:18px;">
                 ⚠️ Cột "Gợi Ý Đặt Thêm" chỉ là ước tính tham khảo đơn giản (= gấp đôi ngưỡng cảnh báo − tồn hiện tại),
@@ -818,7 +784,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260924-status-colors2"></script>
+    <script src="assets/js/app.js?v=20260924-threshold-readonly1"></script>
 
 </body>
 </html>
