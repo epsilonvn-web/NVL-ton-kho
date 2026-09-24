@@ -1346,6 +1346,62 @@ function renderTableHeader(isPriceView) {
         </tr>`;
 }
 
+// Tính khối lượng lý thuyết của 1 tấm thép từ kích thước nằm trong tên vật tư.
+// Dùng tích 3 kích thước nên không phụ thuộc thứ tự dày × rộng × dài hay dài × rộng × dày.
+// Với tấm tròn dạng D700x115 thì dùng diện tích hình tròn × chiều dày.
+// Đơn vị kích thước là mm; khối lượng riêng thép lấy 7.85 t/m³ = 7,850 kg/m³.
+function getSteelPlateUnitMassKg(item) {
+    const name = String(item && item.name || '').toUpperCase().replace(/,/g, '.');
+    const steelDensityFactor = 7.85e-6; // mm³ -> kg đối với thép 7.85 g/cm³
+
+    const roundMatch = name.match(/\bD\s*(\d+(?:\.\d+)?)\s*[X×]\s*(\d+(?:\.\d+)?)/i);
+    if (roundMatch) {
+        const diameter = Number(roundMatch[1]);
+        const thickness = Number(roundMatch[2]);
+        if (diameter > 0 && thickness > 0) {
+            const volumeMm3 = Math.PI * diameter * diameter / 4 * thickness;
+            return volumeMm3 * steelDensityFactor;
+        }
+    }
+
+    const rectMatch = name.match(/(\d+(?:\.\d+)?)\s*[X×]\s*(\d+(?:\.\d+)?)\s*[X×]\s*(\d+(?:\.\d+)?)/i);
+    if (rectMatch) {
+        const a = Number(rectMatch[1]);
+        const b = Number(rectMatch[2]);
+        const c = Number(rectMatch[3]);
+        if (a > 0 && b > 0 && c > 0) return a * b * c * steelDensityFactor;
+    }
+
+    return null;
+}
+
+// Ô Khối Lượng chỉ xuất hiện ở tab THÉP TẤM và luôn phản ánh đúng các dòng đang HIỂN THỊ
+// sau tìm kiếm + hashtag + bộ lọc Sắp hết/Hết/Vượt mức. Như vậy đổi bộ lọc là tổng kg đổi ngay.
+function updateSteelPlateMassStat(items, isPriceView) {
+    const wrap = document.getElementById('stat-mass-wrap');
+    const valueEl = document.getElementById('stat-mass');
+    if (!wrap || !valueEl) return;
+
+    const isSteelPlate = !isPriceView && String(currentCategory || '').toUpperCase() === 'THÉP TẤM';
+    if (!isSteelPlate) {
+        wrap.style.display = 'none';
+        return;
+    }
+
+    let totalKg = 0;
+    (items || []).forEach(item => {
+        const unitKg = getSteelPlateUnitMassKg(item);
+        const quantity = Number(item && item.stock);
+        if (unitKg == null || !Number.isFinite(quantity) || quantity <= 0) return;
+        totalKg += unitKg * quantity;
+    });
+
+    wrap.style.display = 'inline-flex';
+    valueEl.innerText = totalKg >= 1000
+        ? (totalKg / 1000).toLocaleString('en-US', { maximumFractionDigits: 2 }) + ' t'
+        : totalKg.toLocaleString('en-US', { maximumFractionDigits: 0 }) + ' kg';
+}
+
 function renderTable() {
     const searchTerm = (document.getElementById('searchInput').value || '').toLowerCase();
     const tbody = document.getElementById('inventory-table-body');
@@ -1414,6 +1470,7 @@ function renderTable() {
     if (filteredData.length === 0) {
         tbody.innerHTML = `<tr><td colspan="${totalColumns}" style="color:#94a3b8; padding:20px;">Không tìm thấy vật tư phù hợp.</td></tr>`;
         document.getElementById('stat-total').innerText = 0;
+        updateSteelPlateMassStat(filteredData, isPriceView);
         updateStockWarningStats(baseFilteredData, isPriceView);
         lastRenderedData = [];
         lastRenderedIsPriceView = isPriceView;
@@ -1472,6 +1529,7 @@ function renderTable() {
     }
 
     document.getElementById('stat-total').innerText = filteredData.length;
+    updateSteelPlateMassStat(filteredData, isPriceView);
     updateStockWarningStats(baseFilteredData, isPriceView);
 
     // Biểu đồ "Top tồn kho nhiều nhất" - chỉ có ý nghĩa trong từng danh mục cụ thể (đơn vị tính đồng nhất),
