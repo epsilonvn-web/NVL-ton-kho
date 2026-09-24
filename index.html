@@ -79,6 +79,21 @@
         .account-dropdown-row:first-child { padding-top: 0; }
         .account-dropdown-label { font-size: 10.5px; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.4px; }
         .account-dropdown-value { font-size: 13.5px; color: var(--vh-navy); font-weight: 700; }
+        .account-profile-actions { display:flex; gap:8px; margin-top:12px; }
+        .account-profile-edit-btn, .account-profile-save-btn, .account-profile-cancel-btn {
+            border:1px solid #bfdbfe; border-radius:9px; padding:8px 11px; font-size:12px; font-weight:800; cursor:pointer;
+        }
+        .account-profile-edit-btn { width:100%; background:#eff6ff; color:#0f4c81; }
+        .account-profile-save-btn { flex:1; background:#0f8b6d; color:#fff; border-color:#0f8b6d; }
+        .account-profile-cancel-btn { flex:1; background:#fff; color:#64748b; border-color:#cbd5e1; }
+        .account-profile-form { display:none; margin-top:10px; padding-top:10px; border-top:1px solid #e2e8f0; }
+        .account-profile-form.open { display:block; }
+        .account-profile-field { display:grid; gap:4px; margin-bottom:9px; }
+        .account-profile-field label { font-size:10.5px; color:#94a3b8; text-transform:uppercase; font-weight:700; letter-spacing:.4px; }
+        .account-profile-field input, .account-profile-field select {
+            width:100%; height:36px; border:1px solid #cbd5e1; border-radius:8px; padding:0 9px; background:#fff; color:var(--vh-navy); font-size:13px; font-weight:700; outline:none;
+        }
+        .account-profile-field input:focus, .account-profile-field select:focus { border-color:#2d8cc4; box-shadow:0 0 0 2px rgba(45,140,196,.12); }
 
         /* ===== MÀN HÌNH ĐĂNG NHẬP ===== */
         #login-overlay {
@@ -455,6 +470,27 @@
                         <span class="account-dropdown-label">Phân cấp tài khoản</span>
                         <span id="dropdown-rolebadge" class="account-dropdown-value"></span>
                     </div>
+                    <div class="account-profile-actions">
+                        <button type="button" id="btn-edit-own-profile" class="account-profile-edit-btn">✏️ Chỉnh sửa thông tin</button>
+                    </div>
+                    <div id="account-profile-form" class="account-profile-form">
+                        <div class="account-profile-field">
+                            <label for="profileCompanyId">Mã ID công ty</label>
+                            <input type="text" id="profileCompanyId" maxlength="40" autocomplete="off">
+                        </div>
+                        <div class="account-profile-field">
+                            <label for="profileFullName">Họ và tên</label>
+                            <input type="text" id="profileFullName" maxlength="80" autocomplete="name">
+                        </div>
+                        <div class="account-profile-field">
+                            <label for="profileDepartment">Phòng ban</label>
+                            <select id="profileDepartment"></select>
+                        </div>
+                        <div class="account-profile-actions">
+                            <button type="button" id="btn-cancel-own-profile" class="account-profile-cancel-btn">Hủy</button>
+                            <button type="button" id="btn-save-own-profile" class="account-profile-save-btn">💾 Lưu</button>
+                        </div>
+                    </div>
                 </div>
             </div>
             <button type="button" class="btn-logout" id="btn-logout" title="Đăng xuất" aria-label="Đăng xuất">
@@ -776,7 +812,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260923-pinkmax2"></script>
+    <script src="assets/js/app.js?v=20260924-profile-edit1"></script>
 
 </body>
 </html>
