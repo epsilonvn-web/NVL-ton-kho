@@ -24,8 +24,8 @@
             --vh-brand-gradient: linear-gradient(135deg, var(--vh-navy) 0%, var(--vh-blue) 55%, var(--vh-green) 100%);
             --bg-color: #f0f4f8;
             --card-bg: #ffffff;
-            --danger: #e74c3c;
-            --warning: #f39c12;
+            --danger: #FF8C00;
+            --warning: #FF0000;
             --border-color: #d7e0e9;
             --text-muted: #5b6b7c;
         }
@@ -63,7 +63,7 @@
         .company-id-editor { display:flex; align-items:center; gap:7px; }
         .company-id-save-state { min-width:58px; font-size:11px; font-weight:800; white-space:nowrap; color:#64748b; }
         .company-id-save-state.ok { color:#047857; }
-        .company-id-save-state.error { color:#b91c1c; }
+        .company-id-save-state.error { color:#FF0000; }
 
         .user-account-trigger { display: flex; align-items: center; gap: 12px; cursor: pointer; position: relative; padding: 4px 6px; border-radius: 10px; transition: 0.15s; }
         .user-account-trigger:hover { background: rgba(255,255,255,0.1); }
@@ -211,17 +211,18 @@
             display: inline-flex; align-items: center; gap: 10px; box-sizing: border-box;
         }
         .stat-bar-icon { font-size: 19px; line-height: 1; }
-        .stat-bar.warning { border-left-color: var(--warning); background: linear-gradient(135deg, #fff 60%, #fff8ec 100%); }
-        .stat-bar.danger { border-left-color: var(--danger); background: linear-gradient(135deg, #fff 60%, #fef0ef 100%); }
-        .stat-bar.high { border-left-color: #ff3b9d; background: linear-gradient(135deg, #fff 60%, #fff0f7 100%); }
+        .stat-bar.total { border-left-color: #22c55e; background: linear-gradient(135deg, #fff 60%, #f0fdf4 100%); }
+        .stat-bar.warning { border-left-color: #ff3b9d; background: linear-gradient(135deg, #fff 60%, #fff0f7 100%); }
+        .stat-bar.danger { border-left-color: #FF8C00; background: linear-gradient(135deg, #fff 60%, #fff8ec 100%); }
+        .stat-bar.high { border-left-color: #1d4ed8; background: linear-gradient(135deg, #fff 60%, #eff6ff 100%); }
         .stat-bar.clickable { cursor: pointer; transition: 0.2s ease; }
         .stat-bar.clickable:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .stat-bar.not-clickable { cursor: default; opacity: 0.6; }
-        .stat-bar.warning.active-filter { background: var(--warning); }
+        .stat-bar.warning.active-filter { background: #ff3b9d; }
         .stat-bar.warning.active-filter .stat-bar-label, .stat-bar.warning.active-filter .stat-bar-num { color: #fff !important; }
-        .stat-bar.danger.active-filter { background: var(--danger); }
+        .stat-bar.danger.active-filter { background: #FF8C00; }
         .stat-bar.danger.active-filter .stat-bar-label, .stat-bar.danger.active-filter .stat-bar-num { color: #fff !important; }
-        .stat-bar.high.active-filter { background: #ff3b9d; }
+        .stat-bar.high.active-filter { background: #1d4ed8; }
         .stat-bar.high.active-filter .stat-bar-label, .stat-bar.high.active-filter .stat-bar-num { color: #fff !important; }
         .stat-bar-label { color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: 700; white-space: nowrap; }
         .stat-bar-num { font-size: 18px; font-weight: 800; color: var(--vh-dark); }
@@ -238,6 +239,11 @@
         th.sortable { cursor: pointer; user-select: none; }
         th.sortable:hover { background: #e1eef7; }
         tbody tr:nth-child(even) { background: #f9fbfd; }
+        /* Chỉ đổi MÀU CHỮ theo trạng thái cảnh báo, không tô nền để bảng gọn và dễ đọc.
+           Dùng !important để cả các cột có màu inline (Nhập/Xuất/Tồn) vẫn đồng nhất theo trạng thái dòng. */
+        tbody tr.stock-row-low td { color:#ff3b9d !important; }
+        tbody tr.stock-row-out td { color:#FF8C00 !important; }
+        tbody tr.stock-row-high td { color:#1d4ed8 !important; }
         tbody tr:hover { background: #eaf6ef; }
         .sort-arrow { font-size: 10px; margin-left: 4px; display: inline-block; }
         .sort-arrow-inactive { color: #cbd5e1; }
@@ -380,7 +386,7 @@
         .account-role-hint { margin-top:5px; padding:7px 8px 2px; border-top:1px solid #e2e8f0; color:#94a3b8; font-size:10.5px; line-height:1.35; }
         .account-status-pending_approval { background:#fff7ed !important; color:#b45309 !important; border-color:#fbbf24 !important; }
         .account-status-active { background:#ecfdf5 !important; color:#047857 !important; border-color:#6ee7b7 !important; }
-        .account-status-blocked { background:#fef2f2 !important; color:#b91c1c !important; border-color:#fca5a5 !important; }
+        .account-status-blocked { background:#fef2f2 !important; color:#FF0000 !important; border-color:#fca5a5 !important; }
     </style>
 </head>
 <body>
@@ -529,7 +535,7 @@
 
         <!-- STATS -->
         <div class="stat-bar-group">
-            <div class="stat-bar">
+            <div class="stat-bar total">
                 <span class="stat-bar-icon">📋</span>
                 <span class="stat-bar-label">Số Mã Đang Hiển Thị</span>
                 <span class="stat-bar-num" id="stat-total">0</span>
@@ -537,17 +543,17 @@
             <div class="stat-bar warning" id="stat-low-wrap">
                 <span class="stat-bar-icon">⚠️</span>
                 <span class="stat-bar-label">Sắp Hết Hàng</span>
-                <span class="stat-bar-num" id="stat-low" style="color:var(--warning);">0</span>
+                <span class="stat-bar-num" id="stat-low" style="color:#ff3b9d;">0</span>
             </div>
             <div class="stat-bar danger" id="stat-out-wrap">
                 <span class="stat-bar-icon">⛔</span>
                 <span class="stat-bar-label">Hết Hàng</span>
-                <span class="stat-bar-num" id="stat-out" style="color:var(--danger);">0</span>
+                <span class="stat-bar-num" id="stat-out" style="color:#FF8C00;">0</span>
             </div>
             <div class="stat-bar high" id="stat-high-wrap">
                 <span class="stat-bar-icon">⬆️</span>
                 <span class="stat-bar-label">Vượt Mức</span>
-                <span class="stat-bar-num" id="stat-high" style="color:#ff3b9d;">0</span>
+                <span class="stat-bar-num" id="stat-high" style="color:#1d4ed8;">0</span>
             </div>
         </div>
 
@@ -812,7 +818,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260924-profile-edit1"></script>
+    <script src="assets/js/app.js?v=20260924-status-colors2"></script>
 
 </body>
 </html>
