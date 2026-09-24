@@ -215,6 +215,7 @@
         .stat-bar.warning { border-left-color: #ff3b9d; background: linear-gradient(135deg, #fff 60%, #fff0f7 100%); }
         .stat-bar.danger { border-left-color: #FF8C00; background: linear-gradient(135deg, #fff 60%, #fff8ec 100%); }
         .stat-bar.high { border-left-color: #1d4ed8; background: linear-gradient(135deg, #fff 60%, #eff6ff 100%); }
+        .stat-bar.mass { border-left-color: #0f766e; background: linear-gradient(135deg, #fff 60%, #ecfdf5 100%); }
         .stat-bar.clickable { cursor: pointer; transition: 0.2s ease; }
         .stat-bar.clickable:hover { box-shadow: 0 6px 16px rgba(0,0,0,0.12); transform: translateY(-1px); }
         .stat-bar.not-clickable { cursor: default; opacity: 0.6; }
@@ -561,6 +562,11 @@
                 <span class="stat-bar-label">Số Mã Đang Hiển Thị</span>
                 <span class="stat-bar-num" id="stat-total">0</span>
             </div>
+            <div class="stat-bar mass" id="stat-mass-wrap" style="display:none;" title="Khối lượng lý thuyết = kích thước tấm × tồn kho đang hiển thị × khối lượng riêng thép 7.85 t/m³">
+                <span class="stat-bar-icon">⚖️</span>
+                <span class="stat-bar-label">Khối Lượng</span>
+                <span class="stat-bar-num" id="stat-mass" style="color:#0f766e;">0 t</span>
+            </div>
             <div class="stat-bar warning" id="stat-low-wrap">
                 <span class="stat-bar-icon">⚠️</span>
                 <span class="stat-bar-label">Sắp Hết Hàng</span>
@@ -809,7 +815,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260924-sticky-toolbar1"></script>
+    <script src="assets/js/app.js?v=20260924-steel-mass1"></script>
 
 </body>
 </html>
