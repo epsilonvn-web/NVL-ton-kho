@@ -707,6 +707,7 @@ function bindStaticUiEvents() {
     on('btn-open-stagnant', 'click', openStagnantPanel);
     on('btn-open-accounts', 'click', openAccountsPanel);
     on('btn-refresh-data', 'click', refreshData);
+    on('btn-pin-toolbar', 'click', toggleStickyToolbar);
     on('initial-dashboard-tab', 'click', function () { filterCategory('ALL', this); });
 
     on('stat-low-wrap', 'click', () => toggleStockFilter('low'));
@@ -743,11 +744,59 @@ function bindStaticUiEvents() {
     on('btn-confirm-ok', 'click', () => closeFriendlyConfirm(true));
 }
 
+// Ghim cụm điều hướng từ thanh đồng bộ đến hết các ô thống kê ngay dưới header.
+// Desktop/tablet mặc định ghim; điện thoại <= 600px luôn cuộn tự do để không che nội dung.
+function syncStickyToolbarOffset() {
+    const header = document.querySelector('.header');
+    if (!header) return;
+    document.documentElement.style.setProperty('--vhip-header-height', `${Math.ceil(header.getBoundingClientRect().height)}px`);
+}
+
+function applyStickyToolbarState() {
+    const toolbar = document.getElementById('inventory-sticky-toolbar');
+    const button = document.getElementById('btn-pin-toolbar');
+    if (!toolbar || !button) return;
+
+    const isMobile = window.matchMedia('(max-width: 600px)').matches;
+    let pinned = true;
+    try {
+        const saved = localStorage.getItem('vhipStickyToolbarPinned');
+        if (saved !== null) pinned = saved === '1';
+    } catch (_) {}
+
+    // Mobile không ghim bất kể lựa chọn đã lưu từ desktop/tablet.
+    const effectivePinned = !isMobile && pinned;
+    toolbar.classList.toggle('is-pinned', effectivePinned);
+    button.classList.toggle('active', effectivePinned);
+    button.innerText = effectivePinned ? '📌 Đang ghim' : '📍 Ghim thanh';
+    button.setAttribute('aria-pressed', effectivePinned ? 'true' : 'false');
+    button.title = effectivePinned ? 'Bấm để bỏ ghim thanh điều hướng' : 'Bấm để ghim thanh điều hướng';
+}
+
+function toggleStickyToolbar() {
+    if (window.matchMedia('(max-width: 600px)').matches) return;
+    const toolbar = document.getElementById('inventory-sticky-toolbar');
+    if (!toolbar) return;
+    const nextPinned = !toolbar.classList.contains('is-pinned');
+    try { localStorage.setItem('vhipStickyToolbarPinned', nextPinned ? '1' : '0'); } catch (_) {}
+    applyStickyToolbarState();
+}
+
+function initStickyToolbar() {
+    syncStickyToolbarOffset();
+    applyStickyToolbarState();
+    window.addEventListener('resize', () => {
+        syncStickyToolbarOffset();
+        applyStickyToolbarState();
+    });
+}
+
 async function initApp() {
     // app.js được đặt ở cuối <body>, nên toàn bộ DOM đã tồn tại khi hàm này chạy.
     // Bind sự kiện NGAY trước mọi thao tác bất đồng bộ để màn hình đăng nhập luôn bấm được,
     // kể cả khi app-data.json tải chậm hoặc lỗi.
     bindStaticUiEvents();
+    initStickyToolbar();
 
     try {
         await loadAppData();
