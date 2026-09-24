@@ -708,6 +708,31 @@ function bindStaticUiEvents() {
     on('btn-open-accounts', 'click', openAccountsPanel);
     on('btn-refresh-data', 'click', refreshData);
     on('btn-pin-toolbar', 'click', toggleStickyToolbar);
+    on('btn-close-material360', 'click', closeMaterial360);
+
+    const materialOverlay = document.getElementById('material360-overlay');
+    if (materialOverlay) {
+        materialOverlay.addEventListener('click', (e) => { if (e.target === materialOverlay) closeMaterial360(); });
+    }
+    const inventoryBody = document.getElementById('inventory-table-body');
+    if (inventoryBody) {
+        inventoryBody.addEventListener('click', (e) => {
+            const row = e.target.closest('tr[data-material-id]');
+            if (!row) return;
+            openMaterial360(row.dataset.materialId, row.dataset.materialSheet);
+        });
+    }
+    const dashboard = document.getElementById('dashboard-insights');
+    if (dashboard) {
+        dashboard.addEventListener('click', (e) => {
+            const row = e.target.closest('[data-material-id]');
+            if (!row) return;
+            openMaterial360(row.dataset.materialId, row.dataset.materialSheet);
+        });
+    }
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') closeMaterial360();
+    });
     on('initial-dashboard-tab', 'click', function () { filterCategory('ALL', this); });
 
     on('stat-low-wrap', 'click', () => toggleStockFilter('low'));
@@ -1402,6 +1427,314 @@ function updateSteelPlateMassStat(items, isPriceView) {
         : totalKg.toLocaleString('en-US', { maximumFractionDigits: 0 }) + ' kg';
 }
 
+
+function normalizeUnitForValue(unit) {
+    return String(unit == null ? '' : unit).trim().toLowerCase()
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd')
+        .replace(/\s+/g, '');
+}
+
+function getPriceItemForMaterial(item) {
+    if (!item) return null;
+    return flatInventoryList.find(p => isPriceSheetName(p.sheet) && String(p.id) === String(item.id)) || null;
+}
+
+// Chỉ tính giá trị khi đơn vị giá và đơn vị tồn có thể đối chiếu chắc chắn.
+// Riêng THÉP TẤM cho phép giá/kg vì app đã tính được khối lượng lý thuyết từ kích thước.
+function getInventoryValueInfo(item) {
+    const priceItem = getPriceItemForMaterial(item);
+    if (!priceItem) return { value: null, price: null, priceUnit: '', basis: '' };
+    const price = Number(getPriceValue(priceItem.raw));
+    if (!Number.isFinite(price) || price < 0) return { value: null, price: null, priceUnit: priceItem.unit || '', basis: '' };
+
+    const stockUnit = normalizeUnitForValue(item.unit);
+    const priceUnit = normalizeUnitForValue(priceItem.unit);
+    if (stockUnit && priceUnit && stockUnit === priceUnit) {
+        return { value: item.stock * price, price, priceUnit: priceItem.unit || '', basis: 'Theo ĐVT tồn kho' };
+    }
+
+    if (String(item.sheet || '').toUpperCase() === 'THÉP TẤM' && ['kg','kilogram'].includes(priceUnit)) {
+        const unitKg = getSteelPlateUnitMassKg(item);
+        if (unitKg != null) return { value: unitKg * item.stock * price, price, priceUnit: priceItem.unit || 'kg', basis: 'Theo khối lượng lý thuyết' };
+    }
+    return { value: null, price, priceUnit: priceItem.unit || '', basis: 'Khác ĐVT - chưa quy đổi' };
+}
+
+function formatMoneyVnd(value) {
+    if (!Number.isFinite(value)) return '—';
+    if (value >= 1e9) return (value / 1e9).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + ' tỷ';
+    if (value >= 1e6) return (value / 1e6).toLocaleString('vi-VN', { maximumFractionDigits: 1 }) + ' triệu';
+    return Math.round(value).toLocaleString('vi-VN') + ' đ';
+}
+
+function formatNumberCompact(value, maxDigits) {
+    if (!Number.isFinite(Number(value))) return '—';
+    return Number(value).toLocaleString('vi-VN', { maximumFractionDigits: maxDigits == null ? 2 : maxDigits });
+}
+
+function getStockStatusLabel(status) {
+    return { normal:'Bình thường', low:'Sắp hết', out:'Hết hàng', high:'Vượt mức' }[status] || 'Bình thường';
+}
+
+function formatHistoryDate(value) {
+    const raw = String(value == null ? '' : value).trim();
+    if (!raw) return '';
+
+    // Snapshot cũ có thể được Apps Script trả về dưới dạng chuỗi Date dài kiểu
+    // "Fri Oct 09 2026 00:00:00 GMT+0700...". UI chỉ cần ngày nghiệp vụ ngắn gọn.
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) {
+        return d.toLocaleDateString('vi-VN', { day:'2-digit', month:'2-digit', year:'numeric' });
+    }
+
+    // Nếu nguồn đã là dd/MM/yyyy thì giữ nguyên, tránh parse nhầm theo chuẩn US.
+    const m = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+    if (m) return `${m[1].padStart(2,'0')}/${m[2].padStart(2,'0')}/${m[3]}`;
+    return raw;
+}
+
+function getMaterialHistory(item) {
+    const dates = Array.isArray(stockHistory.dates) ? stockHistory.dates : [];
+    const values = stockHistory.data && stockHistory.data[item.id];
+    if (!Array.isArray(values)) return [];
+    return dates.map((date, i) => ({ date: formatHistoryDate(date), value: values[i] == null ? null : Number(values[i]) }))
+        .filter(p => Number.isFinite(p.value));
+}
+
+function renderMaterialHistoryChart(points) {
+    if (!points.length) return '<div class="material360-note">Chưa có lịch sử snapshot cho mã này hoặc tài khoản hiện tại không có quyền xem lịch sử tồn kho.</div>';
+    if (points.length === 1) return `<div class="material360-note">Mới có 1 mốc: <b>${escapeHtml(points[0].date)}</b> — tồn <b>${formatNumberCompact(points[0].value)}</b>.</div>`;
+
+    const width = 620, height = 170, padX = 28, padY = 22;
+    const vals = points.map(p => p.value);
+    let min = Math.min(...vals), max = Math.max(...vals);
+    if (max === min) { max += 1; min = Math.max(0, min - 1); }
+    const coords = points.map((p, i) => {
+        const x = padX + i * (width - 2 * padX) / Math.max(points.length - 1, 1);
+        const y = height - padY - (p.value - min) / (max - min) * (height - 2 * padY);
+        return { x, y, p };
+    });
+    const poly = coords.map(c => `${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+    const dots = coords.map(c => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="#2980b9"><title>${escapeHtml(c.p.date)}: ${formatNumberCompact(c.p.value)}</title></circle>`).join('');
+    return `<svg class="material360-history-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Biểu đồ lịch sử tồn kho">
+        <line x1="${padX}" y1="${height-padY}" x2="${width-padX}" y2="${height-padY}" stroke="#dbe7ef" stroke-width="1" />
+        <polyline points="${poly}" fill="none" stroke="#2980b9" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" />${dots}
+    </svg><div class="material360-history-foot"><span>${escapeHtml(points[0].date)}</span><span>${escapeHtml(points[points.length-1].date)}</span></div>`;
+}
+
+function openMaterial360(materialId, sheetName) {
+    const item = flatInventoryList.find(i => !isPriceSheetName(i.sheet) && String(i.id) === String(materialId) && String(i.sheet) === String(sheetName));
+    if (!item) return;
+    const overlay = document.getElementById('material360-overlay');
+    const body = document.getElementById('material360-body');
+    if (!overlay || !body) return;
+
+    document.getElementById('material360-code').textContent = `${item.id} · ${item.sheet}`;
+    document.getElementById('material360-name').textContent = item.name || '(Chưa có tên vật tư)';
+    const limits = thresholdMap[item.id] || { min:null, max:null };
+    const status = getStockStatus(item);
+    const valueInfo = getInventoryValueInfo(item);
+    const unitKg = String(item.sheet || '').toUpperCase() === 'THÉP TẤM' ? getSteelPlateUnitMassKg(item) : null;
+    const totalKg = unitKg == null ? null : unitKg * item.stock;
+    const history = getMaterialHistory(item);
+
+    const massMetric = unitKg == null ? '' : `<div class="material360-metric"><div class="material360-metric-label">Khối lượng tồn</div><div class="material360-metric-value">${totalKg >= 1000 ? formatNumberCompact(totalKg/1000) + ' t' : formatNumberCompact(totalKg,0) + ' kg'}</div></div>`;
+    const valueMetric = `<div class="material360-metric"><div class="material360-metric-label">Giá trị tồn</div><div class="material360-metric-value">${formatMoneyVnd(valueInfo.value)}</div></div>`;
+    const priceText = valueInfo.price == null ? 'Chưa có giá phù hợp' : `${formatNumberCompact(valueInfo.price,0)} đ/${escapeHtml(valueInfo.priceUnit || item.unit || '')}`;
+
+    body.innerHTML = `
+        <div class="material360-grid">
+            <div class="material360-metric"><div class="material360-metric-label">Tồn hiện tại</div><div class="material360-metric-value">${formatNumberCompact(item.stock)} ${escapeHtml(item.unit)}</div></div>
+            <div class="material360-metric"><div class="material360-metric-label">Trạng thái</div><div class="material360-metric-value"><span class="status-chip ${status}">${getStockStatusLabel(status)}</span></div></div>
+            <div class="material360-metric"><div class="material360-metric-label">Min / Max</div><div class="material360-metric-value">${limits.min == null ? '—' : formatNumberCompact(limits.min)} / ${limits.max == null ? '—' : formatNumberCompact(limits.max)}</div></div>
+            ${massMetric || valueMetric}
+            ${massMetric ? valueMetric : ''}
+        </div>
+        <div class="material360-section-grid">
+            <div class="material360-section">
+                <div class="material360-section-title">📦 Biến động kỳ hiện tại</div>
+                <div class="material360-flow">
+                    <div class="material360-flow-item"><div class="material360-flow-label">Tồn đầu</div><div class="material360-flow-value">${formatNumberCompact(item.tonDau)}</div></div>
+                    <div class="material360-flow-item"><div class="material360-flow-label">Nhập</div><div class="material360-flow-value" style="color:#15803d">+${formatNumberCompact(item.nhap)}</div></div>
+                    <div class="material360-flow-item"><div class="material360-flow-label">Xuất</div><div class="material360-flow-value" style="color:#c2410c">-${formatNumberCompact(item.xuat)}</div></div>
+                    <div class="material360-flow-item"><div class="material360-flow-label">Tồn cuối</div><div class="material360-flow-value">${formatNumberCompact(item.stock)}</div></div>
+                </div>
+            </div>
+            <div class="material360-section">
+                <div class="material360-section-title">💰 Giá & khối lượng</div>
+                <div class="material360-note">
+                    <div><b>Giá TB:</b> ${priceText}</div>
+                    ${unitKg == null ? '' : `<div style="margin-top:6px"><b>KL lý thuyết / tấm:</b> ${formatNumberCompact(unitKg,1)} kg</div>`}
+                    <div style="margin-top:6px"><b>Cơ sở tính giá trị:</b> ${escapeHtml(valueInfo.basis || 'Chưa đủ dữ liệu để đối chiếu ĐVT')}</div>
+                    <div style="margin-top:6px"><b>Giá trị tồn:</b> ${formatMoneyVnd(valueInfo.value)}</div>
+                </div>
+            </div>
+        </div>
+        <div class="material360-section">
+            <div class="material360-section-title">📈 Lịch sử tồn kho</div>
+            ${renderMaterialHistoryChart(history)}
+        </div>`;
+
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeMaterial360() {
+    const overlay = document.getElementById('material360-overlay');
+    if (!overlay || !overlay.classList.contains('open')) return;
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+}
+
+function renderDashboardInsights(items, isPriceView) {
+    const wrap = document.getElementById('dashboard-insights');
+    if (!wrap) return;
+    const show = currentCategory === 'ALL' && !isPriceView;
+    wrap.classList.toggle('visible', show);
+    if (!show) { wrap.innerHTML = ''; return; }
+
+    // Dashboard chỉ tổng hợp từ dữ liệu đã tải vào RAM. Không gọi API phụ để việc mở Dashboard tức thời.
+    const valued = items.map(item => ({ item, info:getInventoryValueInfo(item) })).filter(x => Number.isFinite(x.info.value));
+    const totalValue = valued.reduce((sum,x) => sum + x.info.value, 0);
+    const valuedMap = new Map(valued.map(x => [`${x.item.sheet}|${x.item.id}`, x.info]));
+
+    let steelKg = 0;
+    items.forEach(item => {
+        if (String(item.sheet || '').toUpperCase() !== 'THÉP TẤM') return;
+        const unitKg = getSteelPlateUnitMassKg(item);
+        if (unitKg != null && Number.isFinite(Number(item.stock)) && Number(item.stock) > 0) steelKg += unitKg * Number(item.stock);
+    });
+
+    const categoryValues = {};
+    valued.forEach(x => { categoryValues[x.item.sheet] = (categoryValues[x.item.sheet] || 0) + x.info.value; });
+    const categoryRows = Object.entries(categoryValues).sort((a,b)=>b[1]-a[1]);
+    const maxCategory = categoryRows.length ? categoryRows[0][1] : 1;
+    const categoryHtml = categoryRows.length
+        ? categoryRows.map(([name,value]) => `<div class="dashboard-bar-row"><div class="dashboard-bar-label" title="${escapeHtml(name)}">${escapeHtml(name)}</div><div class="dashboard-bar-track"><div class="dashboard-bar-fill" style="width:${Math.max(2,value/maxCategory*100)}%"></div></div><div class="dashboard-bar-value">${formatMoneyVnd(value)}</div></div>`).join('')
+        : '<div class="material360-note">Chưa đủ dữ liệu giá/ĐVT để tính giá trị theo danh mục.</div>';
+
+    // Biểu đồ donut dùng cùng dữ liệu giá trị theo danh mục với biểu đồ thanh để hai góc nhìn luôn khớp nhau.
+    // Dùng conic-gradient thuần CSS nên không cần thêm thư viện chart, giữ app nhẹ và chạy tốt trên GitHub Pages.
+    const categoryPieColors = ['#2980b9','#27ae60','#f59e0b','#8b5cf6','#ec4899','#14b8a6','#64748b','#ef4444'];
+    let pieCursor = 0;
+    const pieStops = [];
+    const pieLegend = [];
+    if (categoryRows.length && totalValue > 0) {
+        categoryRows.forEach(([name,value], index) => {
+            const pct = value / totalValue * 100;
+            const start = pieCursor;
+            pieCursor += pct;
+            const color = categoryPieColors[index % categoryPieColors.length];
+            pieStops.push(`${color} ${start.toFixed(4)}% ${pieCursor.toFixed(4)}%`);
+            pieLegend.push(`<div class="dashboard-pie-legend-row"><span class="dashboard-pie-dot" style="background:${color}"></span><span class="dashboard-pie-name" title="${escapeHtml(name)}">${escapeHtml(name)}</span><span class="dashboard-pie-percent">${pct.toLocaleString('vi-VN',{maximumFractionDigits:1})}%</span><span class="dashboard-pie-value">${formatMoneyVnd(value)}</span></div>`);
+        });
+    }
+    const categoryPieHtml = pieStops.length
+        ? `<div class="dashboard-pie-layout"><div class="dashboard-pie-wrap"><div class="dashboard-pie" style="background:conic-gradient(${pieStops.join(',')})"><div class="dashboard-pie-hole"><strong>100%</strong><span>Giá trị tồn</span></div></div></div><div class="dashboard-pie-legend">${pieLegend.join('')}</div></div>`
+        : '<div class="material360-note">Chưa đủ dữ liệu giá/ĐVT để tính tỷ trọng giá trị tồn.</div>';
+
+    const topValue = valued.slice().sort((a,b)=>b.info.value-a.info.value).slice(0,8);
+    const topHtml = topValue.length
+        ? topValue.map(x => `<div class="dashboard-list-row" data-material-id="${escapeHtml(x.item.id)}" data-material-sheet="${escapeHtml(x.item.sheet)}"><div><div class="dashboard-list-name">${escapeHtml(x.item.name)}</div><div class="dashboard-list-code">${escapeHtml(x.item.id)} · ${escapeHtml(x.item.sheet)}</div></div><div class="dashboard-list-value">${formatMoneyVnd(x.info.value)}</div></div>`).join('')
+        : '<div class="material360-note">Chưa đủ dữ liệu để xếp hạng giá trị tồn.</div>';
+
+    // Khối "Mã vượt ngưỡng tồn kho" chỉ lấy các mã có Min/Max được cấu hình thật.
+    // Mỗi nhóm lấy tối đa 10 mã và xếp theo khoảng cách tuyệt đối tới ngưỡng để Dashboard ưu tiên
+    // đúng các trường hợp lệch mạnh nhất, đồng thời không để một nhóm chiếm hết danh sách.
+    const thresholdRows = items.map(item => {
+        const limits = thresholdMap[item.id];
+        if (!limits) return null;
+        const stock = Number(item.stock);
+        if (!Number.isFinite(stock)) return null;
+        const min = limits.min !== null && Number.isFinite(Number(limits.min)) ? Number(limits.min) : null;
+        const max = limits.max !== null && Number.isFinite(Number(limits.max)) ? Number(limits.max) : null;
+        return { item, stock, min, max };
+    }).filter(Boolean);
+
+    const attentionOut = thresholdRows
+        .filter(x => x.min !== null && x.stock <= 0)
+        .map(x => ({ ...x, gap:x.min - x.stock, status:'out' }))
+        .sort((a,b) => b.gap - a.gap)
+        .slice(0,10);
+
+    const attentionLow = thresholdRows
+        .filter(x => x.min !== null && x.stock > 0 && x.stock < x.min)
+        .map(x => ({ ...x, gap:x.min - x.stock, status:'low' }))
+        .sort((a,b) => b.gap - a.gap)
+        .slice(0,10);
+
+    const attentionHigh = thresholdRows
+        .filter(x => x.max !== null && x.stock > x.max)
+        .map(x => ({ ...x, gap:x.stock - x.max, status:'high' }))
+        .sort((a,b) => b.gap - a.gap)
+        .slice(0,10);
+
+    const renderAttentionGroup = (title, rows, type) => {
+        if (!rows.length) return `<div class="dashboard-alert-group"><div class="dashboard-alert-group-title ${type}">${title}</div><div class="material360-note">Không có mã trong nhóm này.</div></div>`;
+        return `<div class="dashboard-alert-group"><div class="dashboard-alert-group-title ${type}">${title} <span>${rows.length}</span></div>${rows.map(x => {
+            const i = x.item;
+            const thresholdText = type === 'high'
+                ? `Max ${formatNumberCompact(x.max)} · Vượt ${formatNumberCompact(x.gap)} ${escapeHtml(i.unit)}`
+                : `Min ${formatNumberCompact(x.min)} · Thiếu ${formatNumberCompact(x.gap)} ${escapeHtml(i.unit)}`;
+            return `<div class="dashboard-list-row" data-material-id="${escapeHtml(i.id)}" data-material-sheet="${escapeHtml(i.sheet)}"><div><div class="dashboard-list-name">${escapeHtml(i.name)}</div><div class="dashboard-list-code">${escapeHtml(i.id)} · ${escapeHtml(i.sheet)} · Tồn ${formatNumberCompact(x.stock)} ${escapeHtml(i.unit)} · ${thresholdText}</div></div><div class="dashboard-list-value"><span class="status-chip ${x.status}">${getStockStatusLabel(x.status)}</span></div></div>`;
+        }).join('')}</div>`;
+    };
+
+    const attentionHtml = [
+        renderAttentionGroup('⛔ Hết hàng có Min', attentionOut, 'out'),
+        renderAttentionGroup('⚠️ Dưới Min', attentionLow, 'low'),
+        renderAttentionGroup('⬆️ Vượt Max', attentionHigh, 'high')
+    ].join('');
+
+    const stagnant = typeof getStagnantList === 'function' ? getStagnantList() : {notEnoughData:true,items:[]};
+    const stagnantText = stagnant.notEnoughData ? `Chưa đủ ${stagnant.needed || stagnantMonths} mốc` : `${stagnant.items.length} mã`;
+    const stagnantValued = stagnant.notEnoughData ? [] : stagnant.items.map(s => {
+        const item = items.find(i => String(i.id) === String(s.id) && String(i.sheet) === String(s.sheet));
+        if (!item) return null;
+        const info = valuedMap.get(`${item.sheet}|${item.id}`) || getInventoryValueInfo(item);
+        return { item, info, months:s.months };
+    }).filter(x => x && Number.isFinite(x.info.value)).sort((a,b)=>b.info.value-a.info.value).slice(0,8);
+    const stagnantValueTotal = stagnant.notEnoughData ? null : stagnant.items.reduce((sum,s) => {
+        const item = items.find(i => String(i.id) === String(s.id) && String(i.sheet) === String(s.sheet));
+        if (!item) return sum;
+        const info = valuedMap.get(`${item.sheet}|${item.id}`) || getInventoryValueInfo(item);
+        return Number.isFinite(info.value) ? sum + info.value : sum;
+    }, 0);
+    const stagnantHtml = stagnant.notEnoughData
+        ? `<div class="material360-note">Chưa đủ ${stagnant.have || 0}/${stagnant.needed || stagnantMonths} mốc snapshot để kết luận hàng tồn đọng.</div>`
+        : (stagnantValued.length
+            ? stagnantValued.map(x => `<div class="dashboard-list-row" data-material-id="${escapeHtml(x.item.id)}" data-material-sheet="${escapeHtml(x.item.sheet)}"><div><div class="dashboard-list-name">${escapeHtml(x.item.name)}</div><div class="dashboard-list-code">${escapeHtml(x.item.id)} · ${escapeHtml(x.item.sheet)} · ${x.months} tháng không đổi</div></div><div class="dashboard-list-value">${formatMoneyVnd(x.info.value)}</div></div>`).join('')
+            : '<div class="material360-note">Chưa có hàng tồn đọng nào có đủ dữ liệu giá để xếp theo giá trị.</div>');
+
+    const statusCounts = { normal:0, low:0, out:0, high:0 };
+    items.forEach(i => { const s=getStockStatus(i); if (statusCounts[s] != null) statusCounts[s]++; });
+    const maxStatus = Math.max(1, ...Object.values(statusCounts));
+    const statusHtml = [
+        ['normal','Bình thường'], ['low','Sắp hết'], ['out','Hết hàng'], ['high','Vượt mức']
+    ].map(([key,label]) => `<div class="dashboard-status-row"><div class="dashboard-status-label">${label}</div><div class="dashboard-status-track"><div class="dashboard-status-fill ${key}" style="width:${statusCounts[key] ? Math.max(2,statusCounts[key]/maxStatus*100) : 0}%"></div></div><div class="dashboard-status-value">${statusCounts[key]}</div></div>`).join('');
+
+    const steelMassText = steelKg >= 1000
+        ? `${formatNumberCompact(steelKg/1000,2)} t`
+        : `${formatNumberCompact(steelKg,0)} kg`;
+
+    wrap.innerHTML = `<div class="dashboard-insights-head"><div><div class="dashboard-insights-title">📊 Tổng quan quản trị tồn kho</div><div class="dashboard-insights-sub">Nhìn tổng thể trước, bấm một vật tư để mở Material 360 và xem nguyên nhân chi tiết.</div></div></div>
+        <div class="dashboard-kpi-grid">
+            <div class="dashboard-kpi"><div class="dashboard-kpi-label">Giá trị tồn tính được</div><div class="dashboard-kpi-value">${formatMoneyVnd(totalValue)}</div><div class="dashboard-kpi-note">Tính được ${valued.length}/${items.length} mã có giá và ĐVT đối chiếu được.</div></div>
+            <div class="dashboard-kpi"><div class="dashboard-kpi-label">Khối lượng thép tấm</div><div class="dashboard-kpi-value">${steelMassText}</div><div class="dashboard-kpi-note">Khối lượng lý thuyết của toàn bộ thép tấm đang có tồn.</div></div>
+            <div class="dashboard-kpi"><div class="dashboard-kpi-label">Hàng tồn đọng</div><div class="dashboard-kpi-value small">${stagnantText}</div><div class="dashboard-kpi-note">${stagnantValueTotal == null ? `Theo ngưỡng ${stagnantMonths} tháng snapshot hiện tại.` : `Giá trị tính được: ${formatMoneyVnd(stagnantValueTotal)}.`}</div></div>
+        </div>
+        <div class="dashboard-grid">
+            <div class="dashboard-card"><div class="dashboard-card-title">💰 Giá trị tồn theo danh mục</div>${categoryHtml}</div>
+            <div class="dashboard-card"><div class="dashboard-card-title">🥧 Tỷ trọng giá trị tồn theo danh mục</div>${categoryPieHtml}</div>
+            <div class="dashboard-card"><div class="dashboard-card-title">📌 Cơ cấu trạng thái tồn kho</div>${statusHtml}</div>
+            <div class="dashboard-card"><div class="dashboard-card-title">🏆 Top vật tư theo giá trị tồn</div>${topHtml}</div>
+            <div class="dashboard-card"><div class="dashboard-card-title">📦 Hàng tồn đọng giá trị lớn</div>${stagnantHtml}</div>
+            <div class="dashboard-card" style="grid-column:1/-1"><div class="dashboard-card-title">⚠️ Mã vượt ngưỡng tồn kho</div><div class="dashboard-alert-groups">${attentionHtml}</div></div>
+        </div>`;
+}
+
 function renderTable() {
     const searchTerm = (document.getElementById('searchInput').value || '').toLowerCase();
     const tbody = document.getElementById('inventory-table-body');
@@ -1423,6 +1756,9 @@ function renderTable() {
         const matchesTag = itemMatchesActiveTag(item);
         return matchesSearch && matchesCategory && matchesTag;
     });
+
+    // Dashboard Tổng dùng đúng tập dữ liệu sau tìm kiếm/hashtag nhưng không phụ thuộc bộ lọc trạng thái đang bấm.
+    renderDashboardInsights(baseFilteredData, isPriceView);
 
     // Dữ liệu dùng để HIỂN THỊ BẢNG - có áp thêm bộ lọc cảnh báo nếu đang bật
     const filteredData = baseFilteredData.filter(item => {
@@ -1515,7 +1851,7 @@ function renderTable() {
             const categoryCell = showCategoryColumn ? `<td class="text-left"><span class="badge badge-info">${escapeHtml(item.sheet)}</span></td>` : '';
             const rowClass = status === 'low' ? 'stock-row-low' : status === 'out' ? 'stock-row-out' : status === 'high' ? 'stock-row-high' : '';
             return `
-            <tr class="${rowClass}">
+            <tr class="${rowClass} material-row" data-material-id="${escapeHtml(item.id)}" data-material-sheet="${escapeHtml(item.sheet)}" title="Bấm để xem chi tiết vật tư">
                 <td class="text-left font-bold">${escapeHtml(item.id)}</td>
                 <td class="text-left">${nameCell}</td>
                 <td>${escapeHtml(item.unit)}</td>
