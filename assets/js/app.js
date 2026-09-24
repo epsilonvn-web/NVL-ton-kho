@@ -313,7 +313,9 @@ function doLogout() {
     });
 }
 
-function canEditThresholds() { return hasPermission('EDIT_THRESHOLDS'); }
+function canViewThresholds() { return hasPermission('EDIT_THRESHOLDS'); }
+// Hàm tương thích cho code cũ còn sót: Min/Max hiện là read-only nên luôn từ chối thao tác chỉnh sửa.
+function canEditThresholds() { return false; }
 
 function applyLoggedInUI() {
     if (!currentUser) return;
@@ -340,7 +342,6 @@ function applyLoggedInUI() {
     if (stagnantBox) stagnantBox.style.display = hasPermission('EDIT_STAGNANT_CONFIG') ? 'block' : 'none';
     const stagnantInput = document.getElementById('stagnantMonthsInput');
     if (stagnantInput) stagnantInput.value = stagnantMonths;
-    applyThresholdPermissionUI();
 }
 
 function setVisibleByPermission(id, permission) {
@@ -418,18 +419,8 @@ document.addEventListener('click', function (e) {
 });
 
 function applyThresholdPermissionUI() {
-    const allowed = canEditThresholds();
-    const addRow = document.querySelector('.threshold-add-row');
-    const manualLink = document.querySelector('#manualThresholdForm')?.previousElementSibling;
-    const saveBtn = document.getElementById('btn-save-threshold');
-    const noPermNote = document.getElementById('threshold-no-permission-note');
-    if (addRow) addRow.style.display = allowed ? '' : 'none';
-    if (manualLink) manualLink.style.display = allowed ? '' : 'none';
-    if (!allowed && typeof hideManualThresholdForm === 'function') hideManualThresholdForm();
-    if (saveBtn) saveBtn.style.display = allowed ? '' : 'none';
-    if (noPermNote) noPermNote.style.display = allowed ? 'none' : 'block';
-    document.querySelectorAll('.threshold-inline-input').forEach(el => el.disabled = !allowed);
-    document.querySelectorAll('#thresholdConfigTableBody .btn-refresh').forEach(el => el.disabled = !allowed);
+    // Min/Max từ nay là dữ liệu chỉ đọc do bộ phận Mua hàng quản lý tại nguồn.
+    // Giữ permission EDIT_THRESHOLDS để tương thích ma trận quyền hiện tại, nhưng giao diện không còn thao tác ghi Min/Max.
 }
 
 // Dữ liệu demo dự phòng - dùng khi chưa gọi được GAS_API_URL
@@ -501,11 +492,10 @@ function getSortIndicatorHtml(column) {
 }
 
 // ---- CẢNH BÁO TỒN KHO ----
-// Không áp ngưỡng chung cho toàn bộ ~1000 mã (mỗi loại vật tư có mức "bình thường" khác nhau, không thể dập khuôn).
-// Thay vào đó: chỉ những mã được anh chọn + nhập ngưỡng riêng trong tab "Cảnh báo tồn kho" mới được tô màu cảnh báo.
-// thresholdMap: { [mã vật tư]: { min, max } } - build lại mỗi khi thresholdConfig thay đổi.
-// Min dùng cho cảnh báo sắp hết; Max dùng cho cảnh báo tồn vượt mức. Max được phép để trống.
-let thresholdConfig = []; // [{ id, name, threshold, maxThreshold }] - threshold = Min để tương thích code cũ
+// Min/Max là dữ liệu nghiệp vụ chỉ đọc, đồng bộ từ sheet Canh_bao_ton_kho do bộ phận Mua hàng quản lý.
+// Chỉ mã có ít nhất một giá trị Min/Max mới được đưa vào cảnh báo; cả hai trống thì bỏ qua.
+// thresholdMap: { [mã vật tư]: { min, max } }. Min/Max có thể độc lập và được phép để trống.
+let thresholdConfig = []; // [{ id, name, threshold, maxThreshold, sheet, unit }] - threshold = Min để tương thích phần còn lại của app
 let thresholdMap = {};    // tra cứu nhanh khi render bảng chính, key = mã vật tư
 
 // Lọc bảng theo trạng thái cảnh báo: null = không lọc; 'low' = Sắp Hết Hàng; 'out' = Hết Hàng; 'high' = Vượt Mức.
@@ -616,20 +606,18 @@ function activeTagsByGroupHasFilter() {
 function rebuildThresholdMap() {
     thresholdMap = {};
     thresholdConfig.forEach(t => {
+        const min = t.threshold === null || t.threshold === undefined || t.threshold === '' ? null : Number(t.threshold);
+        const max = t.maxThreshold === null || t.maxThreshold === undefined || t.maxThreshold === '' ? null : Number(t.maxThreshold);
         thresholdMap[t.id] = {
-            min: Number(t.threshold) || 0,
-            max: t.maxThreshold === null || t.maxThreshold === undefined || t.maxThreshold === '' ? null : Number(t.maxThreshold)
+            min: Number.isFinite(min) ? min : null,
+            max: Number.isFinite(max) ? max : null
         };
     });
 
     syncGhostRows();
 
-    // Cập nhật lại ngay số liệu thống kê (SỐ MÃ ĐANG HIỂN THỊ / SẮP HẾT / HẾT HÀNG) và bảng tồn kho -
-    // để anh thấy hiệu lực NGAY sau khi Thêm/Xóa/Sửa ngưỡng, không cần bấm "Làm mới dữ liệu" mới thấy.
-    // An toàn gọi ở đây kể cả lúc trang mới tải xong (DOM đã sẵn sàng từ trước khi processData() chạy).
-    if (document.getElementById('inventory-table-body')) {
-        renderTable();
-    }
+    // Mỗi lần tải/làm mới dữ liệu, cập nhật lại thống kê và bảng theo bộ Min/Max mới nhất từ nguồn Mua hàng.
+    if (document.getElementById('inventory-table-body')) renderTable();
 }
 
 // Đồng bộ "dòng ảo" vào flatInventoryList mỗi khi cấu hình cảnh báo thay đổi - dùng cho mã đã cấu hình
@@ -640,6 +628,8 @@ function syncGhostRows() {
     flatInventoryList = flatInventoryList.filter(item => !item.isGhost);
 
     thresholdConfig.forEach(t => {
+        // Mã chỉ có Max không cần dựng dòng ảo tồn = 0, vì không có nghiệp vụ cảnh báo thiếu/hết hàng.
+        if (t.threshold === null || t.threshold === undefined || t.threshold === '') return;
         // QUAN TRỌNG: loại trừ sheet "Giá TB" khỏi việc kiểm tra "đã tồn tại thật" - vì MỌI mã vật tư đều có
         // 1 dòng giá bên sheet Giá TB (dù có hết hàng ở danh mục thật hay không), nên nếu không loại trừ,
         // hệ thống sẽ luôn nghĩ mã đó "đã có thật" (thấy ở Giá TB) và không bao giờ tạo dòng ảo, dù thực tế
@@ -664,9 +654,13 @@ function syncGhostRows() {
 
 function getStockStatus(item) {
     const limits = thresholdMap[item.id];
-    if (limits === undefined) return 'normal'; // chưa cấu hình cảnh báo cho mã này -> không tô màu gì cả
-    if (item.stock <= 0) return 'out';
-    if (item.stock <= limits.min) return 'low';
+    if (limits === undefined) return 'normal'; // không có Min/Max ở nguồn Mua hàng -> bỏ qua cảnh báo
+
+    // Chỉ có Min mới phát sinh cảnh báo thiếu/hết; chỉ có Max thì chỉ theo dõi vượt mức.
+    if (limits.min !== null && Number.isFinite(limits.min)) {
+        if (item.stock <= 0) return 'out';
+        if (item.stock <= limits.min) return 'low';
+    }
     if (limits.max !== null && Number.isFinite(limits.max) && item.stock >= limits.max) return 'high';
     return 'normal';
 }
@@ -723,20 +717,12 @@ function bindStaticUiEvents() {
     on('btn-toggle-chart', 'click', toggleStockChart);
     on('btn-export-inventory', 'click', exportToExcel);
 
-    on('thresholdSearchInput', 'input', renderThresholdSuggestions);
-    on('btn-add-threshold', 'click', addThresholdItem);
-    on('btn-toggle-manual-threshold', 'click', event => {
-        event.preventDefault();
-        toggleManualThresholdForm();
-    });
-    on('btn-confirm-manual-threshold', 'click', confirmManualThresholdEntry);
     on('thresholdCategoryFilterSelect', 'change', event => {
         thresholdCategoryFilter = event.target.value;
         renderThresholdConfigTable();
     });
     on('threshold-sort-id', 'click', () => toggleThresholdSortColumn('id'));
     on('threshold-sort-name', 'click', () => toggleThresholdSortColumn('name'));
-    on('btn-save-threshold', 'click', saveThresholdConfig);
     on('btn-save-stagnant', 'click', saveStagnantMonths);
 
     on('btn-close-accounts', 'click', closeAccountsPanel);
@@ -916,35 +902,26 @@ function processData(data) {
         });
     });
 
-    // Nạp cấu hình cảnh báo tồn kho (nếu Apps Script có trả về) - ghép thêm tên vật tư để hiển thị đẹp trong tab cấu hình.
-    // Hỗ trợ cả 2 định dạng: cũ (chỉ là số ngưỡng) và mới (object có kèm tên/danh mục/đvt đã lưu sẵn từ lúc thêm mã) -
-    // để không vỡ nếu Apps Script bên server chưa kịp cập nhật theo định dạng mới.
+    // Nạp Min/Max chỉ đọc từ nguồn Mua hàng. Backend đã bỏ qua mọi dòng có cả Min và Max trống.
     const thresholdsFromServer = data._thresholds || {};
     thresholdConfig = Object.keys(thresholdsFromServer).map(id => {
-        const raw = thresholdsFromServer[id];
-        const isObjectFormat = raw !== null && typeof raw === 'object';
-        const threshold = Number(isObjectFormat ? raw.threshold : raw) || 0;
-        const maxRaw = isObjectFormat ? raw.maxThreshold : null;
-        const maxThreshold = maxRaw === null || maxRaw === undefined || maxRaw === '' ? null : Number(maxRaw);
-        // QUAN TRỌNG: loại trừ sheet "Giá TB" khỏi việc tìm "dữ liệu thật" - lý do y hệt syncGhostRows() bên dưới:
-        // mọi mã đều có 1 dòng giá bên Giá TB, nếu không loại trừ thì mã đang hết hàng/ẩn ở danh mục thật
-        // (VD Thép Tấm) sẽ luôn bị "tìm thấy" nhầm qua dòng Giá TB, khiến danh mục anh đã cấu hình bị Giá TB
-        // ghi đè lại mỗi lần tải dữ liệu, dù anh không hề đổi gì.
+        const raw = thresholdsFromServer[id] || {};
+        const minRaw = raw.threshold;
+        const maxRaw = raw.maxThreshold;
+        const min = minRaw === null || minRaw === undefined || minRaw === '' ? null : Number(minRaw);
+        const max = maxRaw === null || maxRaw === undefined || maxRaw === '' ? null : Number(maxRaw);
         const matchedItem = flatInventoryList.find(i => String(i.id) === String(id) && !isPriceSheetName(i.sheet));
 
-        // Ưu tiên lấy tên/danh mục/đvt từ dữ liệu tồn kho hiện tại (luôn là dữ liệu mới nhất) -
-        // chỉ dùng lại thông tin đã lưu trong cấu hình khi mã đó KHÔNG còn thấy trong tồn kho nữa
-        // (trường hợp kế toán đã ẩn dòng = 0 khỏi Sheet gốc).
         return {
             id: id,
-            name: matchedItem ? matchedItem.name : (isObjectFormat && raw.name) || '(mã đã ẩn khỏi bảng tồn kho - có thể do hết hàng)',
-            sheet: matchedItem ? matchedItem.sheet : (isObjectFormat ? raw.sheet : null) || null,
-            unit: matchedItem ? matchedItem.unit : (isObjectFormat ? raw.unit : '') || '',
-            threshold: threshold,
-            maxThreshold: Number.isFinite(maxThreshold) ? maxThreshold : null
+            name: matchedItem ? matchedItem.name : (raw.name || '(mã chưa có trong dữ liệu tồn kho hiện tại)'),
+            sheet: matchedItem ? matchedItem.sheet : (raw.sheet || null),
+            unit: matchedItem ? matchedItem.unit : (raw.unit || ''),
+            threshold: Number.isFinite(min) ? min : null,
+            maxThreshold: Number.isFinite(max) ? max : null
         };
     });
-    rebuildThresholdMap(); // hàm này giờ tự gọi kèm syncGhostRows() để dựng "dòng ảo" luôn, không cần lặp code ở đây nữa
+    rebuildThresholdMap();
 
     // Lưu lại danh sách danh mục thật (loại "Giá TB" ra - sheet đó không có khái niệm tồn kho) để dùng
     // cho dropdown "Danh mục" khi anh cần nhập thủ công 1 mã hoàn toàn chưa có trong dữ liệu tải về.
@@ -1594,7 +1571,8 @@ function showOnlyPanel(panelIdToShow) {
 }
 
 function openThresholdConfigPanel() {
-    if (!hasPermission('EDIT_THRESHOLDS')) return;
+    // Giữ permission hiện tại để không làm xáo trộn ma trận quyền; panel Min/Max bên trong là chỉ đọc.
+    if (!canViewThresholds()) return;
     showOnlyPanel('threshold-config-panel');
     renderThresholdConfigTable();
 }
@@ -1741,7 +1719,7 @@ function renderStagnantPanel() {
             Các mã có số tồn <b>không thay đổi liên tục suốt ${stagnantMonths} tháng gần nhất</b> (không nhập, không xuất) — nên xem xét đẩy hàng để tận dụng vốn.
         </p>
         <p style="color:#94a3b8; font-size:12px; margin-top:0; margin-bottom:18px;">
-            💡 Dựa trên dữ liệu chụp tồn kho tự động mỗi đầu tháng. Ngưỡng ${stagnantMonths} tháng do quản trị viên đặt (chỉnh ở tab ⚙️ Cảnh báo tồn kho).
+            💡 Dựa trên dữ liệu chụp tồn kho tự động mỗi đầu tháng. Ngưỡng ${stagnantMonths} tháng do quản trị viên đặt (chỉnh ở tab 📦 Hàng Tồn Đọng).
         </p>
         <div style="margin-bottom:14px; font-size:13.5px; font-weight:700; color:var(--danger);">
             ⚠️ Có ${result.items.length} mã đang tồn đọng, cần xem xét.
@@ -2314,6 +2292,7 @@ function renderThresholdCategoryFilterOptions() {
 
 function renderThresholdConfigTable() {
     const tbody = document.getElementById('thresholdConfigTableBody');
+    if (!tbody) return;
 
     renderThresholdCategoryFilterOptions();
     updateThresholdSortArrows();
@@ -2324,46 +2303,31 @@ function renderThresholdConfigTable() {
 
     if (thresholdSortState.column) {
         const dir = thresholdSortState.direction === 'asc' ? 1 : -1;
-        const field = thresholdSortState.column; // 'id' hoặc 'name'
+        const field = thresholdSortState.column;
         list.sort((a, b) => String(a[field] || '').localeCompare(String(b[field] || ''), 'vi', { numeric: true }) * dir);
     }
 
+    const countText = document.getElementById('threshold-count-text');
+    if (countText) countText.textContent = `Đang hiển thị ${list.length.toLocaleString('vi-VN')} / ${thresholdConfig.length.toLocaleString('vi-VN')} mã có cấu hình Min/Max.`;
+
     if (list.length === 0) {
         const emptyMsg = thresholdConfig.length === 0
-            ? 'Chưa có mã vật tư nào được cấu hình cảnh báo. Anh tìm và thêm mã ở ô phía trên nhé.'
+            ? 'Hiện chưa có mã nào có Min hoặc Max trong dữ liệu cảnh báo từ bộ phận Mua hàng.'
             : `Không có mã nào thuộc danh mục "${escapeHtml(thresholdCategoryFilter)}" trong danh sách cảnh báo.`;
         tbody.innerHTML = `<tr><td colspan="6" style="color:#94a3b8; padding:16px;">${emptyMsg}</td></tr>`;
-        applyThresholdPermissionUI();
         return;
     }
 
-    tbody.innerHTML = list.map(t => {
-        // Dòng đang được đánh dấu chờ xóa -> tô nền cam để dễ nhận biết, và đổi nút "Xóa" thành "Hoàn tác"
-        const rowStyle = t.markedForDelete ? ' style="background:#fff3cd;"' : '';
-        const btnLabel = t.markedForDelete ? '↩️ Hoàn tác' : 'Xóa';
-        const safeIdAttr = String(t.id).replace(/'/g, "\\'");
-        return `
-        <tr${rowStyle}>
+    tbody.innerHTML = list.map(t => `
+        <tr>
             <td class="text-left font-bold">${escapeHtml(t.id)}</td>
             <td class="text-left">${escapeHtml(t.name)}</td>
             <td class="text-left">${t.sheet ? `<span class="badge badge-info">${escapeHtml(t.sheet)}</span>` : '<span style="color:#cbd5e1;">-</span>'}</td>
-            <td>
-                <input type="number" min="0" class="form-control threshold-inline-input"
-                    value="${escapeHtml(t.threshold)}"
-                    onchange="updateThresholdValue('${safeIdAttr}', 'min', this.value)">
-            </td>
-            <td>
-                <input type="number" min="0" class="form-control threshold-inline-input"
-                    value="${t.maxThreshold === null || t.maxThreshold === undefined ? '' : escapeHtml(t.maxThreshold)}"
-                    placeholder="Không giới hạn"
-                    onchange="updateThresholdValue('${safeIdAttr}', 'max', this.value)">
-            </td>
-            <td><button type="button" class="btn-refresh" onclick="toggleMarkForDelete('${safeIdAttr}')">${btnLabel}</button></td>
+            <td>${t.unit ? escapeHtml(t.unit) : '<span style="color:#cbd5e1;">-</span>'}</td>
+            <td class="text-right font-bold">${t.threshold === null || t.threshold === undefined ? '<span style="color:#cbd5e1;">-</span>' : Number(t.threshold).toLocaleString('en-US')}</td>
+            <td class="text-right font-bold">${t.maxThreshold === null || t.maxThreshold === undefined ? '<span style="color:#cbd5e1;">-</span>' : Number(t.maxThreshold).toLocaleString('en-US')}</td>
         </tr>
-    `;
-    }).join('');
-
-    applyThresholdPermissionUI(); // ô/nút vừa được vẽ lại (DOM mới) - phải áp lại khóa quyền ngay, không thì viewer vẫn bấm sửa được
+    `).join('');
 }
 
 // Cho phép sửa thẳng số ngưỡng ngay trong bảng cấu hình - khỏi phải tìm/chọn lại mã từ ô tìm kiếm phía trên
@@ -2408,11 +2372,11 @@ function updateThresholdValue(id, kind, rawValue) {
 
 let lastReorderList = []; // lưu lại danh sách đang hiển thị để dùng khi xuất Excel
 
-// Tính danh sách các mã cần đặt hàng lại: chỉ xét những mã đã cấu hình ngưỡng cảnh báo (tab "⚙️ Cảnh báo tồn kho")
-// và hiện đang ở trạng thái "sắp hết"/"hết hàng". Sắp xếp mã hết hàng lên trước, trong cùng nhóm thì tỷ lệ
+// Tính danh sách cần đặt hàng: chỉ xét mã có Min từ nguồn Mua hàng và đang ở trạng thái sắp hết/hết hàng. Sắp xếp mã hết hàng lên trước, trong cùng nhóm thì tỷ lệ
 // tồn/ngưỡng càng thấp càng cấp bách, xếp lên trên.
 function getReorderList() {
     return thresholdConfig
+        .filter(t => t.threshold !== null && t.threshold !== undefined && t.threshold !== '')
         .map(t => {
             // Loại trừ sheet "Giá TB" - lý do y hệt processData/syncGhostRows: mọi mã đều có 1 dòng giá bên
             // Giá TB, nếu không loại trừ sẽ vô tình khớp nhầm dòng đó (không có Tồn kho thật) thay vì đúng
@@ -2517,56 +2481,9 @@ function exportReorderList() {
 // Đồng thời đây cũng là lúc XÓA THẬT các dòng đang được đánh dấu cam (chờ xóa) - loại hẳn khỏi thresholdConfig
 // trước khi gửi đi, để cả web lẫn Google Sheet đồng bộ đúng lúc này.
 function saveThresholdConfig() {
-    if (!canEditThresholds()) {
-        showAlert('Tài khoản của anh/chị không có quyền lưu thay đổi cảnh báo tồn kho.', 'error');
-        return;
-    }
-    const btn = document.getElementById('btn-save-threshold');
-    const status = document.getElementById('thresholdSaveStatus');
-    btn.disabled = true;
-    status.innerText = 'Đang lưu lên Google Sheet...';
-
-    thresholdConfig = thresholdConfig.filter(t => !t.markedForDelete);
-    rebuildThresholdMap();
-    renderThresholdConfigTable();
-
-    // Dùng Content-Type: text/plain để trình duyệt không gửi preflight OPTIONS (Apps Script không xử lý được request đó),
-    // Apps Script vẫn đọc được nội dung JSON gửi lên qua e.postData.contents bình thường.
-    fetch(GAS_API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-            action: 'saveThresholds',
-            // Gửi kèm tên/danh mục/đvt (không chỉ mã + ngưỡng) - để nếu sau này kế toán ẩn dòng mã này khỏi
-            // Sheet gốc (tồn = 0), Apps Script vẫn lưu lại đủ thông tin cho app dựng lại đúng "dòng ảo".
-            thresholds: thresholdConfig.map(t => ({
-                id: t.id,
-                threshold: t.threshold,
-                maxThreshold: t.maxThreshold,
-                name: t.name,
-                sheet: t.sheet,
-                unit: t.unit
-            })),
-            token: currentUser.token
-        })
-    })
-        .then(res => res.json())
-        .then(data => {
-            if (isUnauthorizedResponse(data)) return;
-            if (data && data.success) {
-                status.innerText = '✅ Đã lưu lúc ' + new Date().toLocaleTimeString('vi-VN');
-            } else {
-                status.innerText = '❌ Lưu thất bại: ' + (data && data.error ? data.error : 'Không rõ lỗi từ Apps Script');
-            }
-        })
-        .catch(err => {
-            console.error('Lỗi khi lưu cấu hình cảnh báo tồn kho:', err);
-            status.innerText = '❌ Không lưu được - kiểm tra lại mạng hoặc Apps Script đã deploy bản mới chưa.';
-        })
-        .finally(() => {
-            btn.disabled = false;
-        });
+    showAlert('Min/Max hiện là dữ liệu chỉ đọc từ bộ phận Mua hàng; chương trình không ghi thay đổi vào nguồn này.', 'info');
 }
+
 
 
 // ============================================================================
