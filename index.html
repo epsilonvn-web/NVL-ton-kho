@@ -408,6 +408,112 @@
         .account-status-pending_approval { background:#fff7ed !important; color:#b45309 !important; border-color:#fbbf24 !important; }
         .account-status-active { background:#ecfdf5 !important; color:#047857 !important; border-color:#6ee7b7 !important; }
         .account-status-blocked { background:#fef2f2 !important; color:#FF0000 !important; border-color:#fca5a5 !important; }
+
+
+        /* ===== DASHBOARD TỔNG + MATERIAL 360 ===== */
+        .dashboard-insights { display:none; margin-bottom:20px; }
+        .dashboard-insights.visible { display:block; }
+        .dashboard-insights-head { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:14px; flex-wrap:wrap; }
+        .dashboard-insights-title { font-size:18px; font-weight:800; color:var(--vh-navy); }
+        .dashboard-insights-sub { font-size:12.5px; color:#64748b; margin-top:3px; }
+        .dashboard-kpi-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-bottom:14px; }
+        .dashboard-kpi { background:#f8fbfd; border:1px solid #dbe7ef; border-radius:12px; padding:14px 16px; }
+        .dashboard-kpi-label { font-size:11px; color:#64748b; font-weight:800; text-transform:uppercase; letter-spacing:.25px; }
+        .dashboard-kpi-value { margin-top:5px; font-size:22px; font-weight:800; color:var(--vh-navy); }
+        .dashboard-kpi-note { margin-top:3px; font-size:11px; color:#94a3b8; line-height:1.4; }
+        .dashboard-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+        .dashboard-two-col-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:0 20px; }
+        .dashboard-alert-groups { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+        .dashboard-alert-group { min-width:0; border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; background:#fbfdff; }
+        .dashboard-alert-group-title { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:12.5px; font-weight:800; margin-bottom:4px; }
+        .dashboard-alert-group-title span { min-width:22px; height:22px; padding:0 6px; border-radius:999px; display:inline-flex; align-items:center; justify-content:center; background:#f1f5f9; color:#475569; font-size:11px; }
+        .dashboard-alert-group-title.out { color:#c45a00; }
+        .dashboard-alert-group-title.low { color:#d92a83; }
+        .dashboard-alert-group-title.high { color:#1d4ed8; }
+        .dashboard-card { border:1px solid #dbe7ef; border-radius:12px; padding:15px 16px; background:#fff; min-width:0; }
+        .dashboard-card-title { font-size:13.5px; font-weight:800; color:var(--vh-navy); margin-bottom:12px; }
+        .dashboard-bar-row { display:grid; grid-template-columns:minmax(90px,150px) 1fr auto; gap:9px; align-items:center; margin:9px 0; }
+        .dashboard-bar-label { font-size:12px; color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .dashboard-bar-track { height:10px; border-radius:999px; background:#edf2f7; overflow:hidden; }
+        .dashboard-bar-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--vh-blue),var(--vh-green)); }
+        .dashboard-bar-value { font-size:12px; color:#334155; font-weight:800; white-space:nowrap; }
+        .dashboard-pie-layout { display:grid; grid-template-columns:190px minmax(0,1fr); gap:18px; align-items:center; min-height:210px; }
+        .dashboard-pie-wrap { display:flex; align-items:center; justify-content:center; }
+        .dashboard-pie { width:168px; height:168px; border-radius:50%; display:flex; align-items:center; justify-content:center; box-shadow:inset 0 0 0 1px rgba(15,23,42,.05); }
+        .dashboard-pie-hole { width:94px; height:94px; border-radius:50%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; box-shadow:0 2px 10px rgba(15,23,42,.08); text-align:center; }
+        .dashboard-pie-hole strong { font-size:19px; color:var(--vh-navy); line-height:1; }
+        .dashboard-pie-hole span { margin-top:5px; font-size:10px; color:#94a3b8; font-weight:700; }
+        .dashboard-pie-legend { min-width:0; }
+        .dashboard-pie-legend-row { display:grid; grid-template-columns:10px minmax(82px,1fr) 48px auto; gap:7px; align-items:center; padding:5px 0; border-bottom:1px solid #f1f5f9; }
+        .dashboard-pie-legend-row:last-child { border-bottom:0; }
+        .dashboard-pie-dot { width:9px; height:9px; border-radius:50%; display:block; }
+        .dashboard-pie-name { font-size:11.5px; color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .dashboard-pie-percent { font-size:11.5px; font-weight:800; color:var(--vh-navy); text-align:right; white-space:nowrap; }
+        .dashboard-pie-value { font-size:10.5px; color:#64748b; text-align:right; white-space:nowrap; }
+        .dashboard-list-row { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:10px; padding:8px 0; border-bottom:1px solid #f1f5f9; cursor:pointer; }
+        .dashboard-list-row:last-child { border-bottom:0; }
+        .dashboard-list-row:hover .dashboard-list-name { color:var(--vh-blue-dark); }
+        .dashboard-list-name { font-size:12.5px; color:#334155; font-weight:700; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+        .dashboard-list-code { font-size:10.5px; color:#94a3b8; margin-top:2px; }
+        .dashboard-list-value { font-size:12.5px; font-weight:800; color:var(--vh-navy); white-space:nowrap; }
+        .dashboard-status-row { display:grid; grid-template-columns:110px 1fr 44px; gap:9px; align-items:center; margin:10px 0; }
+        .dashboard-status-label { font-size:12px; color:#334155; font-weight:700; }
+        .dashboard-status-track { height:11px; border-radius:999px; background:#edf2f7; overflow:hidden; }
+        .dashboard-status-fill { height:100%; border-radius:999px; }
+        .dashboard-status-fill.normal { background:#22c55e; }
+        .dashboard-status-fill.low { background:#ff3b9d; }
+        .dashboard-status-fill.out { background:#FF8C00; }
+        .dashboard-status-fill.high { background:#1d4ed8; }
+        .dashboard-status-value { font-size:12px; color:#334155; font-weight:800; text-align:right; }
+        .dashboard-kpi-value.small { font-size:19px; }
+        tr.material-row { cursor:pointer; }
+        tr.material-row:hover td:first-child, tr.material-row:hover td:nth-child(2) { text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px; }
+
+        #material360-overlay { display:none; position:fixed; inset:0; z-index:6500; background:rgba(15,23,42,.55); padding:24px; align-items:center; justify-content:center; }
+        #material360-overlay.open { display:flex; }
+        .material360-card { width:min(980px,100%); max-height:92vh; overflow:auto; background:#fff; border-radius:18px; box-shadow:0 26px 70px rgba(0,0,0,.3); position:relative; }
+        .material360-head { position:sticky; top:0; z-index:2; background:linear-gradient(135deg,#f8fbfd,#eef8f4); border-bottom:1px solid #dbe7ef; padding:20px 58px 16px 22px; }
+        .material360-code { font-size:12px; font-weight:800; color:var(--vh-blue-dark); letter-spacing:.3px; }
+        .material360-name { font-size:20px; font-weight:800; color:var(--vh-navy); margin-top:3px; line-height:1.35; }
+        .material360-close { position:absolute; right:16px; top:16px; width:36px; height:36px; border:0; border-radius:50%; background:#fff; color:#64748b; font-size:22px; cursor:pointer; box-shadow:0 2px 9px rgba(0,0,0,.1); }
+        .material360-body { padding:18px 22px 24px; }
+        .material360-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px; }
+        .material360-metric { border:1px solid #dbe7ef; background:#f8fafc; border-radius:11px; padding:12px 13px; min-width:0; }
+        .material360-metric-label { font-size:10.5px; color:#64748b; font-weight:800; text-transform:uppercase; }
+        .material360-metric-value { margin-top:4px; font-size:17px; color:var(--vh-navy); font-weight:800; overflow-wrap:anywhere; }
+        .material360-section-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+        .material360-section { border:1px solid #dbe7ef; border-radius:12px; padding:15px 16px; margin-top:14px; min-width:0; }
+        .material360-section-title { font-size:13.5px; font-weight:800; color:var(--vh-navy); margin-bottom:12px; }
+        .material360-flow { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+        .material360-flow-item { text-align:center; border-radius:9px; background:#f8fafc; padding:10px 6px; }
+        .material360-flow-label { font-size:10.5px; color:#64748b; }
+        .material360-flow-value { font-size:17px; font-weight:800; color:#1e293b; margin-top:3px; }
+        .material360-history-chart { width:100%; height:180px; display:block; }
+        .material360-history-foot { display:flex; justify-content:space-between; color:#94a3b8; font-size:10.5px; margin-top:3px; }
+        .material360-note { color:#64748b; font-size:12px; line-height:1.55; }
+        .status-chip { display:inline-flex; align-items:center; border-radius:999px; padding:5px 9px; font-size:11px; font-weight:800; }
+        .status-chip.normal { background:#eaf7ef; color:#176b3a; }
+        .status-chip.low { background:#fff0f7; color:#d91c77; }
+        .status-chip.out { background:#fff5e8; color:#c76a00; }
+        .status-chip.high { background:#eef4ff; color:#1d4ed8; }
+
+        @media (max-width: 850px) {
+            .dashboard-kpi-grid { grid-template-columns:1fr; }
+            .dashboard-grid, .material360-section-grid, .dashboard-two-col-list, .dashboard-alert-groups { grid-template-columns:1fr; }
+            .material360-grid { grid-template-columns:1fr 1fr; }
+        }
+        @media (max-width: 600px) {
+            #material360-overlay { padding:0; align-items:stretch; }
+            .material360-card { max-height:none; height:100%; border-radius:0; }
+            .material360-grid { grid-template-columns:1fr 1fr; }
+            .material360-flow { grid-template-columns:1fr 1fr; }
+            .dashboard-bar-row { grid-template-columns:90px 1fr auto; }
+            .dashboard-pie-layout { grid-template-columns:1fr; gap:10px; }
+            .dashboard-pie { width:150px; height:150px; }
+            .dashboard-pie-hole { width:84px; height:84px; }
+            .dashboard-pie-legend-row { grid-template-columns:10px minmax(70px,1fr) 44px auto; }
+        }
+
     </style>
 </head>
 <body>
@@ -559,7 +665,7 @@
         <div class="stat-bar-group">
             <div class="stat-bar total">
                 <span class="stat-bar-icon">📋</span>
-                <span class="stat-bar-label">Số Mã Đang Hiển Thị</span>
+                <span class="stat-bar-label">Số Mã</span>
                 <span class="stat-bar-num" id="stat-total">0</span>
             </div>
             <div class="stat-bar mass" id="stat-mass-wrap" style="display:none;" title="Khối lượng lý thuyết = kích thước tấm × tồn kho đang hiển thị × khối lượng riêng thép 7.85 t/m³">
@@ -590,6 +696,9 @@
 
         <!-- MAIN PANEL -->
         <div class="panel view-pane active" id="inventory-panel">
+            <!-- Dashboard Tổng: chỉ hiện ở tab ALL. Dữ liệu lấy từ chính bộ tồn kho đã tải, không gọi API phụ. -->
+            <div id="dashboard-insights" class="dashboard-insights"></div>
+
             <div class="search-bar-row">
                 <input type="text" id="searchInput" class="form-control search-bar" placeholder="Tra cứu mã vật tư, tên vật tư..." >
                 <button type="button" class="btn-refresh" id="btn-toggle-movement" >📊 Hiện Tồn Đầu/Nhập/Xuất</button>
@@ -788,6 +897,19 @@
         </div>
     </div>
 
+
+    <!-- Material 360: click một dòng vật tư để xem tồn hiện tại, biến động, Min/Max, khối lượng/giá trị và lịch sử. -->
+    <div id="material360-overlay" aria-hidden="true">
+        <div class="material360-card" role="dialog" aria-modal="true" aria-labelledby="material360-name">
+            <div class="material360-head">
+                <button type="button" class="material360-close" id="btn-close-material360" aria-label="Đóng">×</button>
+                <div class="material360-code" id="material360-code"></div>
+                <div class="material360-name" id="material360-name"></div>
+            </div>
+            <div class="material360-body" id="material360-body"></div>
+        </div>
+    </div>
+
     <!-- Thư viện SheetJS - dùng để xuất dữ liệu đang xem ra file Excel (.xlsx) thật, không phải CSV giả -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
@@ -815,7 +937,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260924-steel-mass1"></script>
+    <script src="assets/js/app.js?v=20260924-dashboard-pie1"></script>
 
 </body>
 </html>
