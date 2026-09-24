@@ -1840,7 +1840,7 @@ function renderAccountsTable() {
         const rowStyle = acc.status === 'pending_approval' ? ' style="background:#fff8ec;"' : '';
         return `<tr data-user-id="${escapeHtml(acc.userId)}"${rowStyle}>
             <td class="text-left font-bold">${escapeHtml(acc.userId)}</td>
-            <td class="text-left"><div class="company-id-editor"><input class="form-control account-company-id-input" maxlength="40" value="${escapeHtml(acc.companyId || '')}" placeholder="Mã ID công ty" style="margin:0;"><span class="company-id-save-state" aria-live="polite"></span></div></td>
+            <td class="text-left">${escapeHtml(acc.companyId || '-')}</td>
             <td class="text-left">${escapeHtml(acc.name || '-')}</td>
             <td class="text-left">${escapeHtml(acc.email)}</td>
             <td class="text-left">${escapeHtml(acc.department || '-')}</td>
@@ -1853,12 +1853,13 @@ function renderAccountsTable() {
 
 async function saveAccountRow(row, control) {
     const userId = row.dataset.userId;
-    const companyId = row.querySelector('.account-company-id-input').value.trim();
+    const targetAccount = accountsList.find(a => a.userId === userId);
+    // Mã ID công ty do người dùng tự quản lý trong hồ sơ cá nhân; bảng Admin chỉ hiển thị để tránh hai nơi cùng sửa một dữ liệu.
+    const companyId = targetAccount ? String(targetAccount.companyId || '').trim() : '';
     const role = row.querySelector('.account-role-select').value;
     const statusValue = row.querySelector('.account-status-select').value;
     const status = document.getElementById('accountsSaveStatus');
-    const inlineState = row.querySelector('.company-id-save-state');
-    const isCompanyIdChange = !!(control && control.classList && control.classList.contains('account-company-id-input'));
+    const isCompanyIdChange = false;
     const controls = row.querySelectorAll('input,select');
     controls.forEach(el => { el.disabled = true; });
     status.style.color = '#64748b';
@@ -1915,7 +1916,7 @@ async function handleAccountTableChange(event) {
         return;
     }
 
-    if (control.classList.contains('account-role-select') || control.classList.contains('account-status-select') || control.classList.contains('account-company-id-input')) {
+    if (control.classList.contains('account-role-select') || control.classList.contains('account-status-select')) {
         await saveAccountRow(row, control);
     }
 }
