@@ -349,6 +349,68 @@ function setVisibleByPermission(id, permission) {
 }
 
 function toggleAccountDropdown() { document.getElementById('account-dropdown').classList.toggle('open'); }
+function populateOwnProfileDepartmentSelect() {
+    const select = document.getElementById('profileDepartment');
+    if (!select || !currentUser) return;
+    const source = departmentList.length ? departmentList : (Array.isArray(registrationOptions.departments) ? registrationOptions.departments : []);
+    const current = String(currentUser.department || '').trim();
+    const values = source.slice();
+    if (current && !values.includes(current)) values.unshift(current);
+    select.innerHTML = values.map(d => `<option value="${escapeHtml(d)}">${escapeHtml(d)}</option>`).join('');
+    if (current) select.value = current;
+}
+
+function openOwnProfileEditor() {
+    if (!currentUser) return;
+    const companyInput = document.getElementById('profileCompanyId');
+    const nameInput = document.getElementById('profileFullName');
+    const form = document.getElementById('account-profile-form');
+    const editBtn = document.getElementById('btn-edit-own-profile');
+    if (companyInput) companyInput.value = currentUser.companyId || '';
+    if (nameInput) nameInput.value = currentUser.name || '';
+    populateOwnProfileDepartmentSelect();
+    if (form) form.classList.add('open');
+    if (editBtn) editBtn.style.display = 'none';
+    companyInput?.focus();
+}
+
+function closeOwnProfileEditor() {
+    const form = document.getElementById('account-profile-form');
+    const editBtn = document.getElementById('btn-edit-own-profile');
+    if (form) form.classList.remove('open');
+    if (editBtn) editBtn.style.display = '';
+}
+
+async function saveOwnProfile() {
+    if (!currentUser) return;
+    const companyId = String(document.getElementById('profileCompanyId')?.value || '').trim();
+    const name = String(document.getElementById('profileFullName')?.value || '').trim();
+    const department = String(document.getElementById('profileDepartment')?.value || '').trim();
+    if (!companyId || !name || !department) {
+        showAlert('Anh/chị nhập đủ Mã ID công ty, Họ và tên và Phòng ban nhé.', 'info');
+        return;
+    }
+
+    const saveBtn = document.getElementById('btn-save-own-profile');
+    if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Đang lưu...'; }
+    try {
+        const data = await apiPost('updateOwnProfile', { token: currentUser.token, companyId, name, department });
+        if (!data || !data.success) {
+            if (isUnauthorizedResponse(data)) return handleUnauthorizedSession();
+            throw new Error((data && data.error) || 'Không lưu được thông tin.');
+        }
+        const token = currentUser.token;
+        setSessionFromServer(data, token);
+        applyLoggedInUI();
+        closeOwnProfileEditor();
+        showAlert('Đã cập nhật thông tin tài khoản.', 'success');
+    } catch (err) {
+        showAlert(err.message || 'Không lưu được thông tin. Vui lòng thử lại.', 'error');
+    } finally {
+        if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Lưu'; }
+    }
+}
+
 document.addEventListener('click', function (e) {
     const trigger = document.querySelector('.user-account-trigger');
     const dropdown = document.getElementById('account-dropdown');
@@ -640,6 +702,10 @@ function bindStaticUiEvents() {
 
     on('user-account-trigger', 'click', toggleAccountDropdown);
     on('account-dropdown', 'click', event => event.stopPropagation());
+    on('btn-edit-own-profile', 'click', openOwnProfileEditor);
+    on('btn-cancel-own-profile', 'click', closeOwnProfileEditor);
+    on('btn-save-own-profile', 'click', saveOwnProfile);
+    on('profileFullName', 'keydown', event => { if (event.key === 'Enter') saveOwnProfile(); });
     on('btn-logout', 'click', doLogout);
 
     on('btn-open-threshold', 'click', openThresholdConfigPanel);
