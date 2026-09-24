@@ -672,9 +672,9 @@ function getStockStatus(item) {
 }
 
 function getStockColorHex(status) {
-    if (status === 'out') return '#e74c3c';   // đỏ - hết hàng
-    if (status === 'low') return '#f39c12';   // vàng cam - dưới Min
-    if (status === 'high') return '#ff3b9d';  // hồng tươi - từ ngưỡng Max trở lên
+    if (status === 'out') return '#FF8C00';   // cam - hết hàng
+    if (status === 'low') return '#ff3b9d';   // hồng tươi - sắp hết hàng, trạng thái cần ưu tiên xử lý
+    if (status === 'high') return '#1d4ed8';  // blue đậm - từ ngưỡng Max trở lên
     return '#111827';                         // đen - bình thường hoặc mã chưa cấu hình cảnh báo
 }
 
@@ -1368,6 +1368,19 @@ function renderTable() {
         });
     }
 
+    // Hết hàng luôn đặt xuống CUỐI danh sách để các mã còn tồn được ưu tiên theo dõi trước.
+    // Tách rồi ghép lại thay vì sort thêm lần nữa để giữ nguyên thứ tự hiện tại của từng nhóm
+    // (kể cả khi anh vừa sort theo Tên Vật Tư hoặc Tồn Kho).
+    if (!isPriceView) {
+        const availableRows = [];
+        const outRows = [];
+        filteredData.forEach(item => {
+            if (getStockStatus(item) === 'out') outRows.push(item);
+            else availableRows.push(item);
+        });
+        filteredData.splice(0, filteredData.length, ...availableRows, ...outRows);
+    }
+
     const showMovement = showMovementColumns && !isPriceView;
     const showCategoryColumn = currentCategory === 'ALL';
     const totalColumns = isPriceView ? 5 : (4 + (showMovement ? 3 : 0) + (showCategoryColumn ? 1 : 0));
@@ -1417,8 +1430,9 @@ function renderTable() {
                 ? `${escapeHtml(item.name)} <span class="badge badge-danger" style="margin-left:6px;">Ẩn khỏi DS kế toán</span>`
                 : escapeHtml(item.name);
             const categoryCell = showCategoryColumn ? `<td class="text-left"><span class="badge badge-info">${escapeHtml(item.sheet)}</span></td>` : '';
+            const rowClass = status === 'low' ? 'stock-row-low' : status === 'out' ? 'stock-row-out' : status === 'high' ? 'stock-row-high' : '';
             return `
-            <tr>
+            <tr class="${rowClass}">
                 <td class="text-left font-bold">${escapeHtml(item.id)}</td>
                 <td class="text-left">${nameCell}</td>
                 <td>${escapeHtml(item.unit)}</td>
