@@ -301,7 +301,10 @@
         /* THANH ĐIỀU HƯỚNG GHIM: giữ toàn bộ cụm từ trạng thái đồng bộ đến hết các ô thống kê
            ngay dưới header khi cuộn. Chỉ áp dụng từ tablet trở lên; mobile luôn cuộn tự do để không mất chiều cao màn hình. */
         .inventory-sticky-toolbar { position: relative; z-index: 900; }
-        .toolbar-pin-btn { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+        .toolbar-pin-btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+            position: absolute; right: 10px; bottom: 14px; z-index: 2;
+        }
         .inventory-sticky-toolbar.is-pinned {
             position: sticky;
             top: var(--vhip-header-height, 64px);
@@ -538,7 +541,6 @@
                 <button type="button" class="btn-refresh" id="btn-open-reorder">🛒 Cần Đặt Hàng</button>
                 <button type="button" class="btn-refresh" id="btn-open-stagnant">📦 Hàng Tồn Đọng</button>
                 <button type="button" class="btn-refresh" id="btn-refresh-data" >🔄 Làm mới dữ liệu</button>
-                <button type="button" class="btn-refresh toolbar-pin-btn" id="btn-pin-toolbar" title="Ghim/bỏ ghim thanh điều hướng">📌 Đang ghim</button>
             </div>
         </div>
 
@@ -575,6 +577,9 @@
                 <span class="stat-bar-num" id="stat-high" style="color:#1d4ed8;">0</span>
             </div>
         </div>
+
+        <!-- Nút ghim đặt ở góc phải sát mép dưới của cụm điều hướng để thao tác ngay tại ranh giới phần được ghim. -->
+        <button type="button" class="btn-refresh toolbar-pin-btn" id="btn-pin-toolbar" title="Ghim/bỏ ghim thanh điều hướng">📌 Đang ghim</button>
         </div>
 
         <!-- MAIN PANEL -->
