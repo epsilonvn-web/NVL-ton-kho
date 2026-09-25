@@ -750,7 +750,10 @@
                 <button type="button" class="btn-refresh" id="btn-toggle-chart"  style="display:none;">📈 Xem Biểu Đồ Top Tồn Kho</button>
                 <!-- Ô tích (không dùng nút đổi chữ) để nhìn là biết ngay đang ở chế độ nào -->
                 <label class="waiting-toggle" id="btn-toggle-waiting-stock" style="display:none;" title="Chỉ đổi cách hiển thị, không thay đổi số liệu kế toán">
-                    <input type="checkbox" id="chkWaitingStock"> <span id="waiting-toggle-text">Tồn đã trừ chờ xuất</span>
+                    <input type="checkbox" id="chkWaitingStock"> <span id="waiting-toggle-text">Trừ chờ xuất</span>
+                </label>
+                <label class="waiting-toggle" id="btn-toggle-transit-stock" style="display:none;" title="Cộng hàng đã đặt đang về - chỉ đổi cách hiển thị, không thay đổi số liệu kế toán">
+                    <input type="checkbox" id="chkTransitStock"> <span id="transit-toggle-text">Cộng đi đường</span>
                 </label>
                 <button type="button" class="btn-export" id="btn-export-inventory">📥 Xuất Excel</button>
             </div>
@@ -952,7 +955,7 @@
         <div class="panel" id="mrp-panel" style="display:none;">
             <h3 class="panel-title">
                 <span>⏳ Vật Tư Chờ Xuất</span>
-                <button type="button" class="btn-refresh" id="btn-mrp-reload">🔄 Tải lại dữ liệu bóc tách</button>
+                <button type="button" class="btn-refresh" id="btn-mrp-reload" title="Chỉ tải lại dữ liệu đã có trong Database bóc tách">🔄 Tải lại dữ liệu bóc tách</button>
             </h3>
             <div id="mrp-status" style="font-size:12.5px; color:#64748b;"></div>
             <div id="mrp-stats" class="mrp-stats"></div>
@@ -1042,6 +1045,7 @@
                                 <th>ĐVT</th>
                                 <th class="text-right">Tồn Kế Toán</th>
                                 <th class="text-right">Chờ Xuất</th>
+                                <th class="text-right">Đi Đường</th>
                                 <th class="text-right">Còn Lại</th>
                                 <th>Số Đơn</th>
                             </tr>
@@ -1049,7 +1053,7 @@
                         <tbody id="mrpTableBody"><!-- Dữ liệu JS --></tbody>
                     </table>
                 </div>
-                <p style="font-size:12px; color:#94a3b8; margin:6px 0 0 0;">Bấm vào một dòng để xem mã đó thuộc những đơn nào. "Còn Lại" âm (màu cam) = tồn kho không đủ cho các đơn chờ.</p>
+                <p style="font-size:12px; color:#94a3b8; margin:6px 0 0 0;">Bấm vào một dòng để xem mã đó thuộc những đơn nào và hàng đang về từ đâu. <b>Còn Lại = Tồn Kế Toán − Chờ Xuất + Đi Đường</b> - âm (màu cam) là phần cần đặt thêm.</p>
 
                 <h4 class="mrp-subtitle">🆕 Vật tư chưa có mã kho</h4>
                 <p class="mrp-hint">Kho chưa từng có nên toàn bộ là phần cần mua. Vật tư đã có trong kho mà vẫn nằm ở đây là do tên trong bóc tách chưa được gán mã ở sheet VT BT.</p>
@@ -1074,24 +1078,51 @@
             </details>
         </div>
 
-        <!-- PANEL VẬT TƯ ĐI ĐƯỜNG - chờ kết nối dữ liệu theo dõi hàng về của bộ phận Mua hàng -->
+        <!-- PANEL VẬT TƯ ĐI ĐƯỜNG - hàng đã đặt đang về, từ file Quản lý mua hàng (IMPORTRANGE về MH_VTTB / MH_XNK / MH_VHIP) -->
         <div class="panel" id="transit-panel" style="display:none;">
-            <h3 class="panel-title"><span>🚚 Vật Tư Đi Đường</span></h3>
-            <div class="mrp-note">🚧 Chưa kết nối dữ liệu. Tab này sẽ hiển thị danh sách hàng đã mua đang về theo đúng file mà bộ phận Mua hàng đang theo dõi,
-                và phần số lượng sắp về sẽ được cộng vào công tắc tồn kho.</div>
-            <div class="table-responsive">
+            <h3 class="panel-title">
+                <span>🚚 Vật Tư Đi Đường</span>
+                <button type="button" class="btn-refresh" id="btn-transit-reload">🔄 Tải lại dữ liệu</button>
+            </h3>
+            <div id="transit-setup-note" class="mrp-note" style="display:none;">
+                🚧 Chưa thấy dữ liệu mua hàng trong Database chương trình. Tạo 3 sheet <b>MH_VTTB</b>, <b>MH_XNK</b>, <b>MH_VHIP</b>,
+                ô A1 mỗi sheet dán công thức <code>=IMPORTRANGE("link file Quản lý mua hàng";"VTTB!A1:AZ")</code> (đổi VTTB thành XNK / VHIP tương ứng).
+            </div>
+            <div id="transit-status" style="font-size:12.5px; color:#64748b; line-height:1.6;"></div>
+            <div id="transit-stats" class="mrp-stats"></div>
+            <p class="mrp-hint">Chỉ tính dòng <b>có mã vật tư</b> và <b>chưa về đủ</b> (bỏ dòng Đã về / Đóng / Hủy). "Còn về" = SL yêu cầu − SL thực tế đã về.
+                Hàng về được cộng vào cột Đi Đường ở tab Vật tư chờ xuất và ô tích "Cộng đi đường" ở bảng tồn kho.</p>
+            <div class="search-bar-row">
+                <input type="text" id="transitSearch" class="form-control search-bar" placeholder="Tìm mã, tên vật tư, NCC, số YCMH, đơn hàng...">
+                <label class="mrp-toggle"><input type="checkbox" id="transitOnlyBt"> Chỉ vật tư phục vụ đơn chờ xuất</label>
+                <button type="button" class="btn-export" id="btn-export-transit">📥 Xuất Excel</button>
+            </div>
+            <div class="table-responsive mrp-summary-scroll">
                 <table>
                     <thead>
                         <tr>
                             <th class="text-left">Mã Vật Tư</th>
                             <th class="text-left">Tên Vật Tư</th>
                             <th>ĐVT</th>
-                            <th class="text-right">SL Đang Về</th>
-                            <th class="text-left">Nhà Cung Cấp</th>
-                            <th>Ngày Dự Kiến Về</th>
+                            <th class="text-right">Còn Về</th>
+                            <th class="text-right">Đã Về / Đặt</th>
+                            <th class="text-left">NCC</th>
+                            <th>Dự Kiến Về</th>
+                            <th class="text-left">Nguồn</th>
                         </tr>
                     </thead>
-                    <tbody><tr><td colspan="6" style="color:#94a3b8; padding:20px;">Chưa có dữ liệu.</td></tr></tbody>
+                    <tbody id="transitBody"><!-- Dữ liệu JS --></tbody>
+                </table>
+            </div>
+
+            <h4 class="mrp-subtitle">⚠️ Đang về nhưng CHƯA CÓ MÃ (<span id="transit-nocode-count">0</span>)</h4>
+            <p class="mrp-hint">Các dòng này chưa được cộng vào đâu cả. Gửi danh sách (nút Xuất Excel, sheet "Chua co ma") để bộ phận Mua hàng bổ sung mã kế toán.</p>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr><th>Sheet · Dòng</th><th class="text-left">Tên Vật Tư</th><th>ĐVT</th><th class="text-right">Còn Về</th><th class="text-left">NCC</th><th class="text-left">YCMH / Phục vụ</th></tr>
+                    </thead>
+                    <tbody id="transitNoCodeBody"><!-- Dữ liệu JS --></tbody>
                 </table>
             </div>
         </div>
@@ -1137,7 +1168,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260925-waiting9"></script>
+    <script src="assets/js/app.js?v=20260925-transit5"></script>
 
 </body>
 </html>
