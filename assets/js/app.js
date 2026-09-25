@@ -334,6 +334,9 @@ function applyLoggedInUI() {
     setVisibleByPermission('btn-open-threshold', 'EDIT_THRESHOLDS');
     setVisibleByPermission('btn-open-reorder', 'VIEW_REORDER');
     setVisibleByPermission('btn-open-stagnant', 'VIEW_STAGNANT');
+    setVisibleByPermission('btn-open-mrp', 'VIEW_MRP');
+    setVisibleByPermission('btn-open-transit', 'VIEW_MRP');
+    setVisibleByPermission('btn-toggle-waiting-stock', 'VIEW_MRP');
     setVisibleByPermission('btn-export-inventory', 'EXPORT_INVENTORY');
     setVisibleByPermission('btn-export-reorder', 'EXPORT_REORDER');
     const accountsBtn = document.getElementById('btn-open-accounts');
@@ -705,6 +708,7 @@ function bindStaticUiEvents() {
     on('btn-open-threshold', 'click', openThresholdConfigPanel);
     on('btn-open-reorder', 'click', openReorderPanel);
     on('btn-open-stagnant', 'click', openStagnantPanel);
+    bindMrpEvents(on);
     on('btn-open-accounts', 'click', openAccountsPanel);
     on('btn-refresh-data', 'click', refreshData);
     on('btn-pin-toolbar', 'click', toggleStickyToolbar);
@@ -968,6 +972,8 @@ function processData(data) {
                 name: item.name,
                 unit: item.unit,
                 stock: parseFloat(item.tonCuoi) || 0,
+                // Số tồn kế toán GỐC - không bao giờ bị đổi. item.stock có thể bị công tắc "Tồn đã trừ chờ xuất" thay.
+                accountingStock: parseFloat(item.tonCuoi) || 0,
                 tonDau: parseFloat(item.tonDau) || 0,
                 nhap: parseFloat(item.nhap) || 0,
                 xuat: parseFloat(item.xuat) || 0,
@@ -1011,7 +1017,14 @@ function processData(data) {
     stockHistory = data._stockHistory || { dates: [], data: {} };
     stagnantMonths = Number(data._stagnantMonths) || 6;
 
+    // Làm mới tồn kho khi đang bật công tắc "Tồn đã trừ chờ xuất" -> áp lại lên dữ liệu mới TRƯỚC khi vẽ bảng.
+    if (waitingStockMode) applyWaitingStockMode();
+
     renderCategoryTabs(realSheetNames);
+
+    // Đang mở tab Vật tư chờ xuất -> tính lại với tồn kho mới (nhu cầu bóc tách không đổi theo tồn kho).
+    const mrpPanel = document.getElementById('mrp-panel');
+    if (mrpData && mrpPanel && mrpPanel.style.display !== 'none') renderMrpPanel();
 
     // Cập nhật lại chấm đỏ chờ duyệt sau mỗi lần làm mới dữ liệu (chỉ chạy nếu admin đang đăng nhập)
     if (currentUser && isAdminUser()) refreshPendingBadge();
@@ -1341,6 +1354,9 @@ function renderTableHeader(isPriceView) {
     // Nút "Hiện Tồn Đầu/Nhập/Xuất" không có ý nghĩa ở tab Giá TB (không có khái niệm nhập/xuất) -> ẩn luôn nút đi
     const toggleBtn = document.getElementById('btn-toggle-movement');
     if (toggleBtn) toggleBtn.style.display = isPriceView ? 'none' : '';
+    // Công tắc tồn kho chờ xuất: vô nghĩa ở tab Giá TB; và chỉ người có quyền mới thấy.
+    const waitingBtn = document.getElementById('btn-toggle-waiting-stock');
+    if (waitingBtn) waitingBtn.style.display = (isPriceView || !hasPermission('VIEW_MRP')) ? 'none' : '';
 
     const showMovement = showMovementColumns && !isPriceView;
     const movementHeaderCells = showMovement
@@ -1366,7 +1382,7 @@ function renderTableHeader(isPriceView) {
             <th class="text-left sortable" onclick="toggleSortColumn('name')">Tên Vật Tư ${getSortIndicatorHtml('name')}</th>
             <th>ĐVT</th>
             ${movementHeaderCells}
-            <th class="text-right sortable" onclick="toggleSortColumn('value')">Tồn Kho ${getSortIndicatorHtml('value')}</th>
+            <th class="text-right sortable" onclick="toggleSortColumn('value')">${waitingStockMode ? 'Tồn Trừ Chờ Xuất' : 'Tồn Kho'} ${getSortIndicatorHtml('value')}</th>
             ${categoryHeaderCell}
         </tr>`;
 }
@@ -1856,7 +1872,8 @@ function renderTable() {
                 <td class="text-left">${nameCell}</td>
                 <td>${escapeHtml(item.unit)}</td>
                 ${movementCells}
-                <td class="text-right" style="font-weight:bold; font-size:15px; color:${stockColor};">${item.stock.toLocaleString('en-US')}</td>
+                <td class="text-right" style="font-weight:bold; font-size:15px; color:${stockColor};">${item.stock.toLocaleString('en-US')}${
+                    item.waiting ? `<div class="waiting-note" title="Tồn kế toán − vật tư chờ xuất">KT ${item.accountingStock.toLocaleString('en-US')} − chờ ${formatMrpQty(item.waiting)}</div>` : ''}</td>
                 ${categoryCell}
             </tr>
         `;
@@ -1960,7 +1977,14 @@ function exportToExcel() {
                 row['Nhập'] = item.nhap;
                 row['Xuất'] = item.xuat;
             }
-            row['Tồn Kho'] = item.stock;
+            if (waitingStockMode) {
+                // Xuất rõ cả 3 con số để người nhận file không nhầm tồn đã trừ với tồn kế toán.
+                row['Tồn Kế Toán'] = item.accountingStock;
+                row['Chờ Xuất'] = item.waiting || 0;
+                row['Tồn Trừ Chờ Xuất'] = item.stock;
+            } else {
+                row['Tồn Kho'] = item.stock;
+            }
             row['Danh Mục'] = item.sheet;
             return row;
         });
@@ -1983,7 +2007,7 @@ function exportToExcel() {
 let pendingThresholdItem = null; // mã vật tư đang được chọn từ ô gợi ý, chờ bấm "+ Thêm"
 
 // Danh sách toàn bộ panel cấp cao trong app - dùng để ẩn hết rồi chỉ hiện đúng 1 panel cần xem
-const ALL_PANEL_IDS = ['inventory-panel', 'threshold-config-panel', 'reorder-panel', 'accounts-panel', 'stagnant-panel'];
+const ALL_PANEL_IDS = ['inventory-panel', 'threshold-config-panel', 'reorder-panel', 'accounts-panel', 'stagnant-panel', 'mrp-panel', 'transit-panel'];
 
 // Hiển thị đúng một panel và đồng bộ trạng thái sáng của 3 tab chức năng phía trên.
 // Làm như vậy để người dùng luôn biết mình đang đứng ở màn nào và có thể chuyển thẳng bằng tab,
@@ -1997,9 +2021,11 @@ function showOnlyPanel(panelIdToShow) {
     const panelButtonMap = {
         'threshold-config-panel': 'btn-open-threshold',
         'reorder-panel': 'btn-open-reorder',
-        'stagnant-panel': 'btn-open-stagnant'
+        'stagnant-panel': 'btn-open-stagnant',
+        'mrp-panel': 'btn-open-mrp',
+        'transit-panel': 'btn-open-transit'
     };
-    ['btn-open-threshold', 'btn-open-reorder', 'btn-open-stagnant'].forEach(id => {
+    ['btn-open-threshold', 'btn-open-reorder', 'btn-open-stagnant', 'btn-open-mrp', 'btn-open-transit'].forEach(id => {
         const btn = document.getElementById(id);
         if (btn) btn.classList.toggle('active', panelButtonMap[panelIdToShow] === id);
     });
@@ -2928,6 +2954,702 @@ function saveThresholdConfig() {
 }
 
 
+
+// ============================================================================
+// VẬT TƯ CHỜ XUẤT + VẬT TƯ ĐI ĐƯỜNG + CÔNG TẮC TỒN KHO
+// ----------------------------------------------------------------------------
+// Vòng đời vật tư của 1 đơn:  Chưa xử lý  ->  Chờ xuất  ->  Đã xuất
+//   - Đơn mới từ bóc tách = Chưa xử lý: KHÔNG tác động gì.
+//   - Trưởng phòng tích đơn vào Chờ xuất (cộng dồn qua các ngày): toàn bộ vật tư bóc tách của đơn
+//     thành "vật tư chờ xuất" - phần tồn kho hiển thị phải trừ đi dù kho chưa xuất thật.
+//   - Kế hoạch xác nhận Đã xuất khi kho xuất thực tế (được đi thẳng từ Chưa xử lý): đơn nhả phần
+//     để dành, vì lúc đó kế toán đã trừ kho thật.
+// Trạng thái có đúng 1 nguồn: sheet TRANG_THAI_DON_HANG trong Database bóc tách, chỉ app ghi, có nhật ký.
+// App KHÔNG BAO GIỜ ghi vào số liệu kế toán - công tắc tồn kho chỉ đổi cách HIỂN THỊ.
+// ============================================================================
+const MRP_ST = Object.freeze({ NEW: 'Chưa xử lý', WAIT: 'Chờ xuất', DONE: 'Đã xuất' });
+// Sai số dấu phẩy động (VD 1.323 - 1.323 ra 2e-16) - nhỏ hơn mức này coi như bằng 0, không báo thiếu ảo.
+const MRP_EPSILON = 1e-6;
+
+let mrpData = null;              // { orders, demand, warnings, warnCounts, lastRead } từ getMrpData
+let mrpLoading = false;
+let mrpSaving = false;
+let mrpSubTab = 'status';        // 'status' = Trạng thái đơn hàng | 'pick' = Chọn đơn chờ xuất
+const mrpPendingWait = new Map(); // mãĐH -> true (muốn Chờ xuất) / false (muốn về Chưa xử lý), CHƯA lưu
+const mrpSelectedForIssue = new Set(); // đơn đang tích ở tab Trạng thái để xác nhận Đã xuất hàng loạt
+const mrpExpanded = new Set();   // mã vật tư đang mở chi tiết "thuộc những đơn nào"
+let lastMrpView = null;          // bảng tổng hợp đang hiển thị - dùng cho Xuất Excel đúng lát cắt
+let waitingStockMode = false;    // công tắc: bảng tồn kho hiển thị tồn ĐÃ TRỪ vật tư chờ xuất
+let waitingById = {};            // mãVT -> tổng SL chờ xuất (chỉ tính trạng thái ĐÃ LƯU)
+let waitingOrderCount = 0;
+
+function normalizeMrpText(value) {
+    return String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Chuẩn hóa MÃ vật tư để so khớp giữa bóc tách và tồn kho: trong dữ liệu đang có 2 loại chữ "Đ" nhìn giống
+// hệt nhau nhưng khác mã ký tự - Đ tiếng Việt (U+0110) và Ð tiếng Iceland (U+00D0), VD BLĐ460880 vs BLÐ8812150.
+// Không quy về 1 loại thì cùng 1 vật tư sẽ bị báo "Không có trong kho" dù kho vẫn có hàng.
+// Ngoài ra chỉ giữ lại CHỮ và SỐ: mã chép từ phần mềm kế toán hay dính ký tự vô hình (dấu cách đặc biệt U+00A0,
+// ký tự rỗng U+200B...) hoặc lệch dấu gạch/chấm - mắt không thấy nhưng máy coi là khác mã.
+function normalizeMrpCode(value) {
+    return String(value || '').normalize('NFC')
+        .replace(/\u00D0/g, '\u0110').replace(/\u00F0/g, '\u0111')
+        .replace(/[^\p{L}\p{N}]/gu, '')
+        .toUpperCase();
+}
+
+// Đơn vị cùng nghĩa nhưng ghi khác nhau giữa kho và bóc tách (kho "Cái", bóc tách "Chiếc") - coi là một,
+// để không gắn nhãn "ĐVT khác" sai cho hàng loạt bulong, đệm, ecu.
+// (so sau khi đã bỏ dấu: "Mét" -> "met", "Lít" -> "lit").
+// Đơn vị ĐẾM TỪNG CÁI (cái, chiếc, viên, con) gọi khác nhau nhưng cùng bản chất -> coi là một. Mã khớp kho thì
+// hiển thị ĐVT của kế toán làm chuẩn; chỉ còn cảnh báo khi 2 bên đo bằng thứ khác hẳn (VD Kg vs Tấm).
+const MRP_UNIT_SYNONYMS = {
+    'cai': 'chiec', 'chiec': 'chiec', 'vien': 'chiec', 'con': 'chiec',
+    'm': 'm', 'met': 'm',
+    'l': 'l', 'lit': 'l',
+    'kg': 'kg', 'kilogam': 'kg', 'kilogram': 'kg'
+};
+function normalizeMrpUnit(value) {
+    const u = normalizeMrpText(value).replace(/\.$/, '');
+    return MRP_UNIT_SYNONYMS[u] || u;
+}
+
+function formatMrpQty(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '—';
+    return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function mrpStatusBadge(status) {
+    const cls = status === MRP_ST.DONE ? 'badge-success' : status === MRP_ST.WAIT ? 'badge-warning' : 'badge-info';
+    return `<span class="badge ${cls}">${escapeHtml(status)}</span>`;
+}
+
+// Tồn kế toán gốc của 1 dòng - luôn dùng số này cho mọi phép tính của module, không dùng item.stock
+// (item.stock có thể đang bị công tắc tồn kho đổi thành số đã trừ chờ xuất).
+function accountingStockOf(item) {
+    return item && Number.isFinite(item.accountingStock) ? item.accountingStock : (item ? item.stock : 0);
+}
+
+// ---------------------------------------------------------------------------
+// TẢI DỮ LIỆU
+// ---------------------------------------------------------------------------
+async function loadMrpData() {
+    if (!currentUser || !hasPermission('VIEW_MRP') || mrpLoading) return false;
+    mrpLoading = true;
+    const btn = document.getElementById('btn-mrp-reload');
+    if (btn) { btn.disabled = true; btn.innerText = '🔄 Đang tải...'; }
+    setMrpStatus('🕒 Đang tải dữ liệu bóc tách...');
+    try {
+        const data = await apiPost('getMrpData', { token: currentUser.token });
+        if (isUnauthorizedResponse(data)) return false;
+        if (!data || !data.success) throw new Error((data && data.error) || 'Không tải được dữ liệu.');
+        mrpData = data;
+        // Tải lại = lấy trạng thái mới nhất trên máy chủ -> bỏ các thay đổi chưa lưu (đã có thể lỗi thời).
+        mrpPendingWait.clear();
+        mrpSelectedForIssue.clear();
+        rebuildWaitingMap();
+        renderMrpPanel();
+        return true;
+    } catch (err) {
+        console.error('Lỗi tải dữ liệu vật tư chờ xuất:', err);
+        // Giữ nguyên bảng cũ nếu đã có - chỉ báo lỗi ở dòng trạng thái, không xóa trắng màn hình.
+        setMrpStatus('❌ ' + (err.message === 'INVALID_SERVER_RESPONSE' ? 'Máy chủ trả dữ liệu không hợp lệ.' : err.message), true);
+        return false;
+    } finally {
+        mrpLoading = false;
+        if (btn) { btn.disabled = false; btn.innerText = '🔄 Tải lại dữ liệu bóc tách'; }
+    }
+}
+
+function setMrpStatus(text, isError) {
+    const el = document.getElementById('mrp-status');
+    if (!el) return;
+    el.innerText = text;
+    el.style.color = isError ? 'var(--danger)' : '#64748b';
+}
+
+function openMrpPanel() {
+    if (!hasPermission('VIEW_MRP')) return;
+    showOnlyPanel('mrp-panel');
+    if (mrpData) renderMrpPanel();
+    else loadMrpData();
+}
+
+function openTransitPanel() {
+    if (!hasPermission('VIEW_MRP')) return;
+    showOnlyPanel('transit-panel');
+}
+
+function switchMrpSubTab(tab) {
+    mrpSubTab = tab === 'pick' ? 'pick' : 'status';
+    renderMrpPanel();
+}
+
+// ---------------------------------------------------------------------------
+// TÍNH TOÁN
+// ---------------------------------------------------------------------------
+// Trạng thái "đang có hiệu lực" để xem trước: trạng thái đã lưu + thay đổi tích chờ chưa lưu.
+function effectiveMrpStatus(order) {
+    if (mrpPendingWait.has(order.key)) return mrpPendingWait.get(order.key) ? MRP_ST.WAIT : MRP_ST.NEW;
+    return order.status || MRP_ST.NEW;
+}
+
+// Gộp nhu cầu của các đơn Chờ xuất theo mã, so với tồn kế toán.
+// includePending = true: tính cả thay đổi chưa lưu (để xem trước ở tab Chọn đơn).
+function computeWaitingNeeds(includePending) {
+    const orders = (mrpData && mrpData.orders) || [];
+    const waitingOrders = {};
+    orders.forEach(o => {
+        const st = includePending ? effectiveMrpStatus(o) : (o.status || MRP_ST.NEW);
+        if (st === MRP_ST.WAIT) waitingOrders[o.key] = o;
+    });
+
+    const stockById = {};
+    const stockByName = {};   // chỉ dùng để GỢI Ý khi lệch mã, không dùng để lấy số tồn
+    flatInventoryList.forEach(item => {
+        if (isPriceSheetName(item.sheet)) return; // Giá TB không phải tồn kho thật
+        const id = normalizeMrpCode(item.id);
+        if (id && !stockById[id]) stockById[id] = item;
+        const nm = normalizeMrpText(item.name).replace(/[^a-z0-9]/g, '');
+        if (nm && !stockByName[nm]) stockByName[nm] = item;
+    });
+
+    const coded = {};
+    const noCode = {};
+    ((mrpData && mrpData.demand) || []).forEach(line => {
+        const [orderKey, code, name, unit, qty] = line;
+        const order = waitingOrders[orderKey];
+        if (!order || !(qty > 0)) return;
+        const ref = { orderKey, qty, unit, product: order.product, project: order.project, date: order.date };
+        if (code) {
+            const ck = normalizeMrpCode(code);
+            const g = coded[ck] || (coded[ck] = { code, key: ck, demandName: name, demandUnit: unit, need: 0, orders: [] });
+            g.need += qty;
+            g.orders.push(ref);
+        } else {
+            // Vật tư chưa có mã: gom theo tên đã bỏ dấu/khoảng trắng thừa ("Ống inox" = "Ống Inox").
+            const k = normalizeMrpText(name);
+            const g = noCode[k] || (noCode[k] = { name, unit, need: 0, orders: [] });
+            g.need += qty;
+            g.orders.push(ref);
+        }
+    });
+
+    const sortOrders = list => list.sort((a, b) => String(b.orderKey).localeCompare(String(a.orderKey), 'vi', { numeric: true }));
+    const rows = Object.values(coded).map(g => {
+        const item = stockById[g.key];
+        const stock = accountingStockOf(item);
+        const remain = stock - g.need;   // tồn còn lại sau khi để dành cho các đơn chờ
+        // Tồn âm (lỗi số liệu) coi như 0 khi tính thiếu - không để nó "cộng thêm" vào số cần mua.
+        let shortage = g.need - Math.max(stock, 0);
+        if (shortage < MRP_EPSILON) shortage = 0;
+        // Không khớp mã nhưng kho có vật tư CÙNG TÊN -> gần như chắc chắn là lệch mã giữa VT BT và kế toán.
+        // Chỉ gợi ý để người dùng sửa VT BT; KHÔNG tự lấy tồn theo tên vì tên trùng vẫn có thể khác vật tư.
+        const nameHint = !item ? stockByName[normalizeMrpText(g.demandName).replace(/[^a-z0-9]/g, '')] : null;
+        // Mã nằm ở nhiều đơn: so ĐVT của TỪNG đơn (không chỉ đơn đầu tiên) - đơn nào lệch thì chỉ ra đúng đơn đó.
+        const unitGroups = {};   // ĐVT (đã chuẩn hóa) -> { label, orders: [] }
+        g.orders.forEach(o => {
+            const k = normalizeMrpUnit(o.unit);
+            (unitGroups[k] = unitGroups[k] || { label: o.unit || '(trống)', orders: [] }).orders.push(o.orderKey);
+        });
+        const baseUnit = item && item.unit ? normalizeMrpUnit(item.unit) : null;
+        const unitKeys = Object.keys(unitGroups);
+        const unitMismatch = baseUnit ? unitKeys.some(k => k !== baseUnit) : unitKeys.length > 1;
+        const unitDetail = unitKeys.map(k => `${unitGroups[k].label}: ${unitGroups[k].orders.join(', ')}`).join(' · ');
+        return {
+            nameHintCode: nameHint ? String(nameHint.id).trim() : '',
+            // Hiển thị đúng mã như bên kho (nếu khớp được) để người xem tra cứu tiếp không bị lệch ký tự.
+            code: item ? String(item.id).trim() : g.code, key: g.key, name: item ? item.name : g.demandName, unit: item ? item.unit : g.demandUnit,
+            demandUnit: g.demandUnit, need: g.need, stock, remain, shortage, inStockList: !!item,
+            // ĐVT bóc tách khác ĐVT kho (VD Bộ vs Kg) thì phép trừ vô nghĩa - đánh dấu để người xem kiểm tra.
+            unitMismatch, unitDetail,
+            orders: sortOrders(g.orders)
+        };
+    }).sort((a, b) => {
+        // Mã thiếu lên trước, thiếu gần như toàn bộ lên trên. Không so số tuyệt đối vì khác đơn vị.
+        if ((a.shortage > 0) !== (b.shortage > 0)) return a.shortage > 0 ? -1 : 1;
+        if (a.shortage > 0) {
+            const diff = (b.shortage / b.need) - (a.shortage / a.need);
+            if (Math.abs(diff) > MRP_EPSILON) return diff;
+        }
+        return String(a.name).localeCompare(String(b.name), 'vi');
+    });
+    const noCodeRows = Object.values(noCode).map(g => Object.assign(g, { orders: sortOrders(g.orders) }))
+        .sort((a, b) => String(a.name).localeCompare(String(b.name), 'vi'));
+
+    return { rows, noCodeRows, orderCount: Object.keys(waitingOrders).length };
+}
+
+// Dựng lại bảng "mã -> SL chờ xuất" từ trạng thái ĐÃ LƯU, rồi áp lại công tắc tồn kho nếu đang bật.
+// Chỉ dùng trạng thái đã lưu: bảng tồn kho là số liệu chung, không được nhảy theo thao tác chưa lưu.
+function rebuildWaitingMap() {
+    waitingById = {};
+    waitingOrderCount = 0;
+    if (mrpData) {
+        const res = computeWaitingNeeds(false);
+        res.rows.forEach(r => { waitingById[r.key] = r.need; });
+        waitingOrderCount = res.orderCount;
+    }
+    applyWaitingStockMode();
+}
+
+// Công tắc tồn kho: đổi item.stock để TOÀN BỘ phần hiển thị có sẵn (màu Min/Max, 4 ô thống kê, dashboard,
+// biểu đồ, Cần đặt hàng, Xuất Excel) tự dùng số đã trừ mà không phải sửa từng chỗ. Số kế toán gốc luôn giữ
+// ở item.accountingStock nên tắt công tắc là khôi phục nguyên trạng.
+function applyWaitingStockMode() {
+    flatInventoryList.forEach(item => {
+        if (!Number.isFinite(item.accountingStock)) item.accountingStock = item.stock;
+        const waiting = (!isPriceSheetName(item.sheet) && waitingStockMode) ? (waitingById[normalizeMrpCode(item.id)] || 0) : 0;
+        item.waiting = waiting;
+        item.stock = waitingStockMode ? item.accountingStock - waiting : item.accountingStock;
+    });
+    updateWaitingStockUi();
+}
+
+function updateWaitingStockUi() {
+    // Ô tích luôn phản ánh đúng chế độ đang áp dụng (kể cả khi bật thất bại thì tự bỏ tích lại).
+    const box = document.getElementById('chkWaitingStock');
+    if (box) box.checked = waitingStockMode;
+    const wrap = document.getElementById('btn-toggle-waiting-stock');
+    if (wrap) wrap.classList.toggle('active', waitingStockMode);
+    const banner = document.getElementById('waiting-stock-banner');
+    if (banner) {
+        banner.style.display = waitingStockMode ? 'block' : 'none';
+        banner.innerText = `🧮 Đang xem tồn kho ĐÃ TRỪ vật tư chờ xuất của ${waitingOrderCount} đơn hàng (chưa cộng vật tư đi đường). ` +
+            `Màu cảnh báo Min/Max, thống kê, Cần đặt hàng và Xuất Excel đều theo số này. Bấm lại nút để về số liệu kế toán.`;
+    }
+}
+
+async function toggleWaitingStockMode() {
+    if (!hasPermission('VIEW_MRP')) return;
+    if (!waitingStockMode && !mrpData) {
+        // Lần đầu bật mà chưa có dữ liệu chờ xuất -> tải trước, lỗi thì không bật (tránh hiển thị số sai).
+        const box = document.getElementById('chkWaitingStock');
+        const wrap = document.getElementById('btn-toggle-waiting-stock');
+        const text = document.getElementById('waiting-toggle-text');
+        if (box) box.disabled = true;
+        if (wrap) wrap.classList.add('is-loading');
+        if (text) text.innerText = 'Đang tải vật tư chờ...';
+        const ok = await loadMrpData();
+        if (box) box.disabled = false;
+        if (wrap) wrap.classList.remove('is-loading');
+        if (text) text.innerText = 'Tồn đã trừ chờ xuất';
+        if (!ok) {
+            updateWaitingStockUi();
+            showAlert('Không tải được dữ liệu vật tư chờ xuất nên chưa bật được chế độ này. Anh/chị thử lại sau.', 'error');
+            return;
+        }
+    }
+    waitingStockMode = !waitingStockMode;
+    applyWaitingStockMode();
+    renderTable();
+}
+
+// ---------------------------------------------------------------------------
+// GHI TRẠNG THÁI
+// ---------------------------------------------------------------------------
+async function submitOrderStatusChanges(changes, successText) {
+    if (!changes.length || mrpSaving) return false;
+    mrpSaving = true;
+    // Vẽ lại ngay để nút Lưu / Xác nhận hiện vòng quay + khóa mọi ô tích, nút thao tác trong lúc chờ máy chủ.
+    renderMrpPanel();
+    setMrpStatus('💾 Đang lưu...');
+    try {
+        const data = await apiPost('updateOrderStatus', { token: currentUser.token, changes });
+        if (isUnauthorizedResponse(data)) return false;
+        if (!data || !data.success) {
+            showAlert((data && data.error) || 'Lưu thất bại.', 'error');
+            setMrpStatus('❌ Chưa lưu được thay đổi.', true);
+            return false;
+        }
+        const updated = data.statuses || {};
+        mrpData.orders.forEach(o => {
+            const u = updated[o.key];
+            if (u) { o.status = u.status; o.statusBy = u.by; o.statusAt = u.at; }
+        });
+        changes.forEach(c => { mrpPendingWait.delete(c.key); mrpSelectedForIssue.delete(c.key); });
+        rebuildWaitingMap();
+        if (waitingStockMode) renderTable();
+        renderMrpPanel();
+        showAlert(successText, 'success');
+        return true;
+    } catch (err) {
+        console.error('Lỗi lưu trạng thái đơn:', err);
+        showAlert('Không kết nối được máy chủ, thay đổi chưa được lưu.', 'error');
+        setMrpStatus('❌ Không kết nối được máy chủ.', true);
+        return false;
+    } finally {
+        mrpSaving = false;
+        renderMrpPanel();
+    }
+}
+
+// Nút đang chờ máy chủ: vòng quay + chữ "Đang lưu..." + mờ, không bấm được lần 2.
+function setMrpButtonBusy(btn, busy, normalText) {
+    if (!btn) return;
+    btn.classList.toggle('btn-busy', busy);
+    btn.disabled = busy || btn.disabled;
+    if (busy) btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>Đang lưu...';
+    else btn.innerText = normalText;
+}
+
+function saveWaitingList() {
+    if (!hasPermission('EDIT_WAITING_LIST') || !mrpData || mrpSaving) return;
+    const changes = [];
+    mrpData.orders.forEach(o => {
+        if (!mrpPendingWait.has(o.key)) return;
+        const to = mrpPendingWait.get(o.key) ? MRP_ST.WAIT : MRP_ST.NEW;
+        if (to !== o.status) changes.push({ key: o.key, from: o.status, to });
+    });
+    if (!changes.length) { mrpPendingWait.clear(); renderMrpPanel(); return; }
+    const addCount = changes.filter(c => c.to === MRP_ST.WAIT).length;
+    const removeCount = changes.length - addCount;
+    const parts = [];
+    if (addCount) parts.push(`đưa ${addCount} đơn vào Chờ xuất`);
+    if (removeCount) parts.push(`bỏ ${removeCount} đơn khỏi Chờ xuất`);
+    showConfirm(`Anh/chị xác nhận ${parts.join(' và ')}?`, () => {
+        submitOrderStatusChanges(changes, `✅ Đã lưu danh mục chờ xuất (${changes.length} thay đổi).`);
+    });
+}
+
+function cancelWaitingChanges() {
+    mrpPendingWait.clear();
+    renderMrpPanel();
+}
+
+function confirmIssued(keys) {
+    if (!hasPermission('CONFIRM_ISSUED') || !mrpData || mrpSaving) return;
+    const orders = mrpData.orders.filter(o => keys.includes(o.key) && o.status !== MRP_ST.DONE);
+    if (!orders.length) return;
+    const label = orders.length === 1 ? `đơn ${orders[0].key}` : `${orders.length} đơn: ${orders.map(o => o.key).join(', ')}`;
+    showConfirm(`Xác nhận kho ĐÃ XUẤT vật tư cho ${label}?\n\nVật tư để dành cho các đơn này sẽ được nhả ra khỏi phần chờ xuất.`, () => {
+        submitOrderStatusChanges(orders.map(o => ({ key: o.key, from: o.status, to: MRP_ST.DONE })),
+            `✅ Đã xác nhận xuất kho cho ${orders.length} đơn.`);
+    });
+}
+
+function undoIssued(key) {
+    if (!hasPermission('CONFIRM_ISSUED') || !mrpData || mrpSaving) return;
+    const o = mrpData.orders.find(x => x.key === key);
+    if (!o || o.status !== MRP_ST.DONE) return;
+    showConfirm(`Hoàn tác: đưa đơn ${key} từ "Đã xuất" về "Chưa xử lý"?\n\nChỉ dùng khi bấm nhầm. Thao tác này được ghi vào nhật ký.`, () => {
+        submitOrderStatusChanges([{ key, from: o.status, to: MRP_ST.NEW }], `↩ Đã đưa đơn ${key} về Chưa xử lý.`);
+    });
+}
+
+// ---------------------------------------------------------------------------
+// HIỂN THỊ
+// ---------------------------------------------------------------------------
+function renderMrpPanel() {
+    if (!document.getElementById('mrp-panel')) return;
+    document.getElementById('btn-mrp-subtab-status').classList.toggle('active', mrpSubTab === 'status');
+    document.getElementById('btn-mrp-subtab-pick').classList.toggle('active', mrpSubTab === 'pick');
+    document.getElementById('mrp-sub-status').style.display = mrpSubTab === 'status' ? 'block' : 'none';
+    document.getElementById('mrp-sub-pick').style.display = mrpSubTab === 'pick' ? 'block' : 'none';
+
+    if (!mrpData) { setMrpStatus('🕒 Chưa tải dữ liệu bóc tách.'); return; }
+    setMrpStatus(`🕒 ${mrpData.lastRead ? 'Bóc tách cập nhật lúc ' + mrpData.lastRead : 'Chưa rõ thời điểm cập nhật bóc tách'} · Tồn kho theo lần tải gần nhất của trang`);
+
+    // Số đếm theo trạng thái ĐÃ LƯU - hiện ở cả 2 tab nhánh.
+    const counts = { [MRP_ST.NEW]: 0, [MRP_ST.WAIT]: 0, [MRP_ST.DONE]: 0 };
+    mrpData.orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
+    document.getElementById('mrp-stats').innerHTML = `
+        <div class="mrp-stat"><span>Tổng đơn</span><b>${mrpData.orders.length}</b></div>
+        <div class="mrp-stat"><span>Chưa xử lý</span><b>${counts[MRP_ST.NEW]}</b></div>
+        <div class="mrp-stat mrp-stat-warning"><span>Chờ xuất</span><b>${counts[MRP_ST.WAIT]}</b></div>
+        <div class="mrp-stat mrp-stat-success"><span>Đã xuất</span><b>${counts[MRP_ST.DONE]}</b></div>`;
+
+    if (mrpSubTab === 'status') renderMrpStatusTab();
+    else renderMrpPickTab();
+    renderMrpWarnings();
+}
+
+// Tab nhánh 1: danh sách đơn + trạng thái, Kế hoạch xác nhận Đã xuất / hoàn tác.
+function renderMrpStatusTab() {
+    const canIssue = hasPermission('CONFIRM_ISSUED');
+    const filter = document.getElementById('mrpStatusFilter').value;
+    const term = normalizeMrpText(document.getElementById('mrpStatusSearch').value);
+    const list = mrpData.orders.filter(o =>
+        (!filter || o.status === filter) &&
+        (!term || [o.key, o.product, o.project].some(v => normalizeMrpText(v).includes(term))));
+
+    document.getElementById('mrp-issue-bar').style.display = canIssue ? 'flex' : 'none';
+    const selectable = list.filter(o => o.status !== MRP_ST.DONE);
+    const selectedVisible = selectable.filter(o => mrpSelectedForIssue.has(o.key)).length;
+    const bulkBtn = document.getElementById('btn-mrp-bulk-issue');
+    bulkBtn.disabled = mrpSelectedForIssue.size === 0;
+    setMrpButtonBusy(bulkBtn, mrpSaving, `✔ Xác nhận Đã xuất (${mrpSelectedForIssue.size} đơn đã chọn)`);
+    const allBox = document.getElementById('mrpSelectAllIssue');
+    allBox.checked = selectable.length > 0 && selectedVisible === selectable.length;
+    allBox.disabled = selectable.length === 0 || mrpSaving;
+
+    document.getElementById('mrpStatusHeadSelect').style.display = canIssue ? '' : 'none';
+    document.getElementById('mrpStatusHeadAction').style.display = canIssue ? '' : 'none';
+    const tbody = document.getElementById('mrpStatusBody');
+    if (!list.length) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#94a3b8; padding:20px;">Không có đơn hàng nào khớp bộ lọc.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = list.map(o => {
+        const selectCell = canIssue
+            ? `<td>${o.status !== MRP_ST.DONE ? `<input type="checkbox" class="mrp-issue-check" data-key="${escapeHtml(o.key)}"${mrpSelectedForIssue.has(o.key) ? ' checked' : ''}${mrpSaving ? ' disabled' : ''}>` : ''}</td>`
+            : '';
+        const actionCell = canIssue
+            ? `<td>${o.status === MRP_ST.DONE
+                ? `<button type="button" class="btn-refresh mrp-action-btn" data-action="undo" data-key="${escapeHtml(o.key)}"${mrpSaving ? ' disabled' : ''}>↩ Hoàn tác</button>`
+                : `<button type="button" class="btn-refresh mrp-action-btn" data-action="issue" data-key="${escapeHtml(o.key)}"${mrpSaving ? ' disabled' : ''}>✔ Đã xuất</button>`}</td>`
+            : '';
+        const updated = o.statusAt ? `${escapeHtml(o.statusBy)}<br><span style="color:#94a3b8;">${escapeHtml(o.statusAt)}</span>` : '<span style="color:#94a3b8;">—</span>';
+        return `
+            <tr>
+                ${selectCell}
+                <td class="text-left font-bold">${escapeHtml(o.key)}</td>
+                <td class="text-left">${escapeHtml(o.product)}</td>
+                <td class="text-left mrp-project-cell">${escapeHtml(o.project)}</td>
+                <td>${escapeHtml(o.date)}</td>
+                <td>${mrpStatusBadge(o.status)}</td>
+                <td style="font-size:12px;">${updated}</td>
+                ${actionCell}
+            </tr>`;
+    }).join('');
+}
+
+// Tab nhánh 2: tích chọn đơn vào Chờ xuất + bảng tổng hợp vật tư chờ xuất (xem trước cả thay đổi chưa lưu).
+function renderMrpPickTab() {
+    const canWait = hasPermission('EDIT_WAITING_LIST');
+    const term = normalizeMrpText(document.getElementById('mrpPickSearch').value);
+    // Chỉ đơn Chưa xử lý / Chờ xuất mới chọn được; Đã xuất đã xong việc.
+    const candidates = mrpData.orders.filter(o => o.status !== MRP_ST.DONE &&
+        (!term || [o.key, o.product, o.project].some(v => normalizeMrpText(v).includes(term))));
+
+    let pendingCount = 0;
+    mrpData.orders.forEach(o => {
+        if (mrpPendingWait.has(o.key) && (mrpPendingWait.get(o.key) ? MRP_ST.WAIT : MRP_ST.NEW) !== o.status) pendingCount++;
+    });
+    document.getElementById('mrp-pick-actions').style.display = canWait ? 'flex' : 'none';
+    document.getElementById('mrp-pick-readonly').style.display = canWait ? 'none' : 'block';
+    const saveBtn = document.getElementById('btn-mrp-save-waiting');
+    saveBtn.disabled = pendingCount === 0;
+    setMrpButtonBusy(saveBtn, mrpSaving, pendingCount ? `💾 Lưu danh mục chờ (${pendingCount} thay đổi)` : '💾 Lưu danh mục chờ');
+    const cancelBtn = document.getElementById('btn-mrp-cancel-waiting');
+    cancelBtn.style.display = pendingCount ? '' : 'none';
+    cancelBtn.disabled = mrpSaving;
+
+    document.getElementById('mrpPickBody').innerHTML = candidates.length === 0
+        ? `<tr><td colspan="5" style="color:#94a3b8; padding:20px;">Không có đơn Chưa xử lý / Chờ xuất nào${term ? ' khớp bộ lọc' : ''}.</td></tr>`
+        : candidates.map(o => {
+            const eff = effectiveMrpStatus(o);
+            const changed = eff !== o.status;
+            return `
+                <tr class="${changed ? 'mrp-pending-row' : ''}">
+                    <td><input type="checkbox" class="mrp-wait-check" data-key="${escapeHtml(o.key)}"${eff === MRP_ST.WAIT ? ' checked' : ''}${canWait && !mrpSaving ? '' : ' disabled'}></td>
+                    <td class="text-left font-bold">${escapeHtml(o.key)}</td>
+                    <td class="text-left">${escapeHtml(o.product)}</td>
+                    <td class="text-left mrp-project-cell">${escapeHtml(o.project)}</td>
+                    <td>${mrpStatusBadge(eff)}${changed ? ' <span style="font-size:11px; color:var(--danger); font-weight:700;">chưa lưu</span>' : ''}</td>
+                </tr>`;
+        }).join('');
+
+    renderMrpWaitingSummary(pendingCount);
+}
+
+function renderMrpWaitingSummary(pendingCount) {
+    const result = computeWaitingNeeds(true);
+    const term = normalizeMrpText(document.getElementById('mrpSearchInput').value);
+    const onlyShort = document.getElementById('mrpOnlyShort').checked;
+    const matchTerm = r => !term || normalizeMrpText(r.code).includes(term) || normalizeMrpText(r.name).includes(term)
+        || r.orders.some(o => normalizeMrpText(o.orderKey).includes(term));
+    const visibleRows = result.rows.filter(r => matchTerm(r) && (!onlyShort || r.shortage > 0));
+    const visibleNoCode = result.noCodeRows.filter(matchTerm);
+    lastMrpView = { rows: visibleRows, noCodeRows: visibleNoCode };
+
+    const shortCount = result.rows.filter(r => r.shortage > 0).length;
+    document.getElementById('mrp-summary-caption').innerHTML =
+        `Tổng hợp vật tư của <b>${result.orderCount}</b> đơn Chờ xuất: <b>${result.rows.length}</b> mã, trong đó <b style="color:var(--warning);">${shortCount}</b> mã không đủ tồn` +
+        (result.noCodeRows.length ? `, <b>${result.noCodeRows.length}</b> vật tư chưa có mã` : '') +
+        (pendingCount ? ` <span style="color:var(--danger); font-weight:700;">(đang xem trước, gồm ${pendingCount} thay đổi chưa lưu)</span>` : '');
+
+    const tbody = document.getElementById('mrpTableBody');
+    if (!visibleRows.length) {
+        tbody.innerHTML = `<tr><td colspan="7" style="color:#94a3b8; padding:20px;">${
+            result.orderCount === 0 ? 'Chưa có đơn nào ở trạng thái Chờ xuất.'
+            : result.rows.length === 0 ? 'Các đơn Chờ xuất chưa có vật tư nào có mã kho.'
+            : onlyShort && !term ? '✅ Tồn kho đủ cho mọi mã của các đơn Chờ xuất.' : 'Không có mã nào khớp bộ lọc.'}</td></tr>`;
+    } else {
+        tbody.innerHTML = visibleRows.map(r => {
+            const open = mrpExpanded.has(r.code);
+            const flags = [
+                !r.inStockList ? (r.nameHintCode
+                    ? `<span class="badge badge-warning" title="Mã bóc tách không có trong kho, nhưng kho có vật tư cùng tên với mã khác - kiểm tra lại mã trong sheet VT BT. Đang tính tồn = 0.">⚠ Kho có tên này với mã ${escapeHtml(r.nameHintCode)}</span>`
+                    : '<span class="badge badge-info" title="Kho hiện không có mã này (báo cáo tồn kho kế toán không có dòng của mã) - tính tồn = 0, toàn bộ số chờ xuất là phần cần mua">Tồn 0 · kho chưa có</span>') : '',
+                r.unitMismatch ? `<span class="badge badge-warning" title="ĐVT kho: ${escapeHtml(r.inStockList ? r.unit : '(không có)')} | ĐVT bóc tách theo đơn - ${escapeHtml(r.unitDetail)}. Sửa trong sheet VT BT rồi Tổng hợp lại các đơn này.">⚠ ĐVT khác</span>` : ''
+            ].join(' ');
+            const main = `
+                <tr class="mrp-row${open ? ' is-open' : ''}" data-mrp-code="${escapeHtml(r.code)}">
+                    <td class="text-left font-bold">${open ? '▾' : '▸'} ${escapeHtml(r.code)}</td>
+                    <td class="text-left">${escapeHtml(r.name)} ${flags}</td>
+                    <td>${escapeHtml(r.unit)}</td>
+                    <td class="text-right">${formatMrpQty(r.stock)}</td>
+                    <td class="text-right font-bold">${formatMrpQty(r.need)}</td>
+                    <td class="text-right font-bold" style="color:${r.remain < -MRP_EPSILON ? 'var(--warning)' : 'var(--vh-green-dark)'};">${formatMrpQty(Math.abs(r.remain) < MRP_EPSILON ? 0 : r.remain)}</td>
+                    <td>${r.orders.length}</td>
+                </tr>`;
+            // Mã khớp kho -> hiện ĐVT kế toán cho mọi đơn (kế toán là chuẩn); chưa khớp mới hiện ĐVT từng đơn.
+            const detail = open ? `<tr class="mrp-detail-row"><td colspan="7">${renderMrpOrderDetail(r.orders, r.inStockList ? r.unit : r.demandUnit, r.inStockList)}</td></tr>` : '';
+            return main + detail;
+        }).join('');
+    }
+
+    document.getElementById('mrpNoCodeBody').innerHTML = visibleNoCode.length === 0
+        ? `<tr><td colspan="4" style="color:#94a3b8; padding:14px;">${result.noCodeRows.length === 0 ? '✅ Không có vật tư chưa có mã trong các đơn Chờ xuất.' : 'Không có vật tư nào khớp bộ lọc.'}</td></tr>`
+        : visibleNoCode.map(g => `
+            <tr>
+                <td class="text-left">${escapeHtml(g.name)}</td>
+                <td>${escapeHtml(g.unit)}</td>
+                <td class="text-right font-bold" style="color:var(--warning);">${formatMrpQty(g.need)}</td>
+                <td class="text-left" style="font-size:12px;">${g.orders.map(o => `${escapeHtml(o.orderKey)}: ${formatMrpQty(o.qty)}`).join(' · ')}</td>
+            </tr>`).join('');
+}
+
+function renderMrpOrderDetail(orders, unit, useStockUnit) {
+    const lines = orders.map(o => `
+        <tr>
+            <td class="text-left font-bold">${escapeHtml(o.orderKey)}</td>
+            <td class="text-left">${escapeHtml(o.product)}</td>
+            <td class="text-left mrp-project-cell">${escapeHtml(o.project)}</td>
+            <td>${escapeHtml(o.date)}</td>
+            <td class="text-right font-bold">${formatMrpQty(o.qty)} ${escapeHtml((useStockUnit ? unit : o.unit) || unit || '')}</td>
+        </tr>`).join('');
+    return `<table class="mrp-detail-table"><thead><tr>
+        <th class="text-left">Mã ĐH</th><th class="text-left">Sản phẩm</th><th class="text-left">Dự án</th><th>Ngày BT</th><th class="text-right">SL chờ xuất</th>
+        </tr></thead><tbody>${lines}</tbody></table>`;
+}
+
+function renderMrpWarnings() {
+    const counts = mrpData.warnCounts || {};
+    const totalWarn = Object.values(counts).reduce((s, n) => s + n, 0);
+    document.getElementById('mrp-warn-count').innerText = totalWarn;
+    const warnList = mrpData.warnings || [];
+    document.getElementById('mrp-warnings').innerHTML = totalWarn === 0
+        ? '<p style="color:#94a3b8; font-size:13px;">✅ Không có cảnh báo nào.</p>'
+        : `<p style="font-size:12.5px; color:#64748b; margin:8px 0;">${Object.keys(counts).map(k => `${escapeHtml(k)}: <b>${counts[k]}</b>`).join(' · ')}
+            ${warnList.length < totalWarn ? ` — hiển thị ${warnList.length} dòng đầu, xem đủ trong sheet BOC_TACH_CANH_BAO` : ''}</p>
+           <div class="table-responsive"><table class="mrp-detail-table"><thead><tr><th>Mức độ</th><th class="text-left">Mã ĐH</th><th>Sheet</th><th class="text-left">Nội dung</th></tr></thead><tbody>
+           ${warnList.map(w => `<tr><td>${escapeHtml(w[0])}</td><td class="text-left">${escapeHtml(w[1])}</td><td>${escapeHtml(w[2])}</td><td class="text-left">${escapeHtml(w[3])}</td></tr>`).join('')}
+           </tbody></table></div>`;
+}
+
+function toggleMrpRow(code) {
+    if (mrpExpanded.has(code)) mrpExpanded.delete(code);
+    else mrpExpanded.add(code);
+    renderMrpPanel();
+}
+
+// Gắn sự kiện cho module - gọi 1 lần trong bindStaticUiEvents.
+function bindMrpEvents(on) {
+    on('btn-open-mrp', 'click', openMrpPanel);
+    on('btn-open-transit', 'click', openTransitPanel);
+    on('chkWaitingStock', 'change', toggleWaitingStockMode);
+    on('btn-mrp-reload', 'click', loadMrpData);
+    on('btn-mrp-subtab-status', 'click', () => switchMrpSubTab('status'));
+    on('btn-mrp-subtab-pick', 'click', () => switchMrpSubTab('pick'));
+    on('mrpStatusFilter', 'change', renderMrpPanel);
+    on('mrpStatusSearch', 'input', renderMrpPanel);
+    on('mrpPickSearch', 'input', renderMrpPanel);
+    on('mrpSearchInput', 'input', renderMrpPanel);
+    on('mrpOnlyShort', 'change', renderMrpPanel);
+    on('btn-mrp-save-waiting', 'click', saveWaitingList);
+    on('btn-mrp-cancel-waiting', 'click', cancelWaitingChanges);
+    on('btn-export-mrp', 'click', exportMrp);
+    on('btn-mrp-bulk-issue', 'click', () => confirmIssued(Array.from(mrpSelectedForIssue)));
+    on('mrpSelectAllIssue', 'change', (e) => {
+        // Chọn/bỏ chọn tất cả đơn ĐANG HIỂN THỊ (theo bộ lọc) chưa Đã xuất.
+        document.querySelectorAll('#mrpStatusBody .mrp-issue-check').forEach(box => {
+            if (e.target.checked) mrpSelectedForIssue.add(box.dataset.key);
+            else mrpSelectedForIssue.delete(box.dataset.key);
+        });
+        renderMrpPanel();
+    });
+
+    const statusBody = document.getElementById('mrpStatusBody');
+    if (statusBody) {
+        statusBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('.mrp-action-btn');
+            if (!btn) return;
+            if (btn.dataset.action === 'issue') confirmIssued([btn.dataset.key]);
+            else if (btn.dataset.action === 'undo') undoIssued(btn.dataset.key);
+        });
+        statusBody.addEventListener('change', (e) => {
+            const box = e.target.closest('.mrp-issue-check');
+            if (!box) return;
+            if (box.checked) mrpSelectedForIssue.add(box.dataset.key);
+            else mrpSelectedForIssue.delete(box.dataset.key);
+            renderMrpPanel();
+        });
+    }
+    const pickBody = document.getElementById('mrpPickBody');
+    if (pickBody) {
+        pickBody.addEventListener('change', (e) => {
+            const box = e.target.closest('.mrp-wait-check');
+            if (!box || !hasPermission('EDIT_WAITING_LIST') || mrpSaving) return;
+            const order = mrpData.orders.find(o => o.key === box.dataset.key);
+            if (!order) return;
+            // Tích lại về đúng trạng thái đã lưu = không còn là thay đổi -> xóa khỏi danh sách chờ lưu.
+            const wantWait = box.checked;
+            if ((wantWait ? MRP_ST.WAIT : MRP_ST.NEW) === order.status) mrpPendingWait.delete(order.key);
+            else mrpPendingWait.set(order.key, wantWait);
+            renderMrpPanel();
+        });
+    }
+    const mrpBody = document.getElementById('mrpTableBody');
+    if (mrpBody) {
+        mrpBody.addEventListener('click', (e) => {
+            const row = e.target.closest('tr[data-mrp-code]');
+            if (row) toggleMrpRow(row.dataset.mrpCode);
+        });
+    }
+}
+
+function exportMrp() {
+    if (!hasPermission('VIEW_MRP')) return;
+    if (typeof XLSX === 'undefined') {
+        showAlert('Không tải được thư viện xuất Excel (có thể do mất mạng). Anh thử tải lại trang rồi bấm lại giúp em.', 'error');
+        return;
+    }
+    if (!lastMrpView || (lastMrpView.rows.length === 0 && lastMrpView.noCodeRows.length === 0)) {
+        showAlert('Không có dữ liệu vật tư chờ xuất nào để xuất với bộ lọc hiện tại.', 'error');
+        return;
+    }
+    const round = n => Math.round(Number(n) * 1000) / 1000;
+    const summary = lastMrpView.rows.map(r => ({
+        'Mã Vật Tư': r.code, 'Tên Vật Tư': r.name, 'ĐVT': r.unit,
+        'Tồn Kế Toán': round(r.stock), 'Chờ Xuất': round(r.need), 'Còn Lại': round(r.remain),
+        'Số Đơn': r.orders.length,
+        'Ghi Chú': [!r.inStockList ? (r.nameHintCode ? `Lệch mã - kho có tên này với mã ${r.nameHintCode}` : 'Tồn 0 - kho chưa có') : '', r.unitMismatch ? `ĐVT lệch - kho: ${r.inStockList ? r.unit : '(không có)'}; bóc tách: ${r.unitDetail}` : ''].filter(Boolean).join('; ')
+    }));
+    const noCode = lastMrpView.noCodeRows.map(g => ({
+        'Tên Vật Tư': g.name, 'ĐVT': g.unit, 'Cần Mua': round(g.need),
+        'Các Đơn': g.orders.map(o => `${o.orderKey}: ${round(o.qty)}`).join('; ')
+    }));
+    const detail = [];
+    lastMrpView.rows.forEach(r => r.orders.forEach(o => detail.push({
+        'Mã ĐH': o.orderKey, 'Mã Vật Tư': r.code, 'Tên Vật Tư': r.name, 'ĐVT': r.inStockList ? r.unit : (o.unit || r.demandUnit), 'SL Chờ Xuất': round(o.qty), 'Sản Phẩm': o.product, 'Dự Án': o.project
+    })));
+    lastMrpView.noCodeRows.forEach(g => g.orders.forEach(o => detail.push({
+        'Mã ĐH': o.orderKey, 'Mã Vật Tư': '(chưa có mã)', 'Tên Vật Tư': g.name, 'ĐVT': g.unit, 'SL Chờ Xuất': round(o.qty), 'Sản Phẩm': o.product, 'Dự Án': o.project
+    })));
+
+    const workbook = XLSX.utils.book_new();
+    if (summary.length) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), 'Cho xuat theo ma');
+    if (noCode.length) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(noCode), 'Chua co ma');
+    if (detail.length) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(detail), 'Chi tiet theo don');
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    XLSX.writeFile(workbook, `VatTuChoXuat_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`);
+}
 
 // ============================================================================
 // KHỞI ĐỘNG ỨNG DỤNG
