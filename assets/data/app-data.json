@@ -279,6 +279,9 @@
     "EDIT_STAGNANT_CONFIG": "Sửa cấu hình hàng tồn đọng",
     "EXPORT_INVENTORY": "Xuất Excel tồn kho",
     "EXPORT_REORDER": "Xuất Excel cần đặt hàng",
+    "VIEW_MRP": "Xem vật tư chờ xuất / đi đường + công tắc tồn kho",
+    "EDIT_WAITING_LIST": "Chọn đơn vào chờ xuất",
+    "CONFIRM_ISSUED": "Xác nhận đơn đã xuất kho",
     "MANAGE_ACCOUNTS": "Quản lý tài khoản",
     "MANAGE_ROLE_PERMISSIONS": "Quản lý ma trận phân quyền"
   }
