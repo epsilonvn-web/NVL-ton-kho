@@ -337,6 +337,7 @@ function applyLoggedInUI() {
     setVisibleByPermission('btn-open-mrp', 'VIEW_MRP');
     setVisibleByPermission('btn-open-transit', 'VIEW_MRP');
     setVisibleByPermission('btn-toggle-waiting-stock', 'VIEW_MRP');
+    setVisibleByPermission('btn-toggle-transit-stock', 'VIEW_MRP');
     setVisibleByPermission('btn-export-inventory', 'EXPORT_INVENTORY');
     setVisibleByPermission('btn-export-reorder', 'EXPORT_REORDER');
     const accountsBtn = document.getElementById('btn-open-accounts');
@@ -1025,6 +1026,8 @@ function processData(data) {
     // Đang mở tab Vật tư chờ xuất -> tính lại với tồn kho mới (nhu cầu bóc tách không đổi theo tồn kho).
     const mrpPanel = document.getElementById('mrp-panel');
     if (mrpData && mrpPanel && mrpPanel.style.display !== 'none') renderMrpPanel();
+    const transitPanel = document.getElementById('transit-panel');
+    if (mrpData && transitPanel && transitPanel.style.display !== 'none') renderTransitPanel();
 
     // Cập nhật lại chấm đỏ chờ duyệt sau mỗi lần làm mới dữ liệu (chỉ chạy nếu admin đang đăng nhập)
     if (currentUser && isAdminUser()) refreshPendingBadge();
@@ -1355,8 +1358,10 @@ function renderTableHeader(isPriceView) {
     const toggleBtn = document.getElementById('btn-toggle-movement');
     if (toggleBtn) toggleBtn.style.display = isPriceView ? 'none' : '';
     // Công tắc tồn kho chờ xuất: vô nghĩa ở tab Giá TB; và chỉ người có quyền mới thấy.
-    const waitingBtn = document.getElementById('btn-toggle-waiting-stock');
-    if (waitingBtn) waitingBtn.style.display = (isPriceView || !hasPermission('VIEW_MRP')) ? 'none' : '';
+    ['btn-toggle-waiting-stock', 'btn-toggle-transit-stock'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = (isPriceView || !hasPermission('VIEW_MRP')) ? 'none' : '';
+    });
 
     const showMovement = showMovementColumns && !isPriceView;
     const movementHeaderCells = showMovement
@@ -1382,7 +1387,7 @@ function renderTableHeader(isPriceView) {
             <th class="text-left sortable" onclick="toggleSortColumn('name')">Tên Vật Tư ${getSortIndicatorHtml('name')}</th>
             <th>ĐVT</th>
             ${movementHeaderCells}
-            <th class="text-right sortable" onclick="toggleSortColumn('value')">${waitingStockMode ? 'Tồn Trừ Chờ Xuất' : 'Tồn Kho'} ${getSortIndicatorHtml('value')}</th>
+            <th class="text-right sortable" onclick="toggleSortColumn('value')">${stockColumnLabel()} ${getSortIndicatorHtml('value')}</th>
             ${categoryHeaderCell}
         </tr>`;
 }
@@ -1873,7 +1878,7 @@ function renderTable() {
                 <td>${escapeHtml(item.unit)}</td>
                 ${movementCells}
                 <td class="text-right" style="font-weight:bold; font-size:15px; color:${stockColor};">${item.stock.toLocaleString('en-US')}${
-                    item.waiting ? `<div class="waiting-note" title="Tồn kế toán − vật tư chờ xuất">KT ${item.accountingStock.toLocaleString('en-US')} − chờ ${formatMrpQty(item.waiting)}</div>` : ''}</td>
+                    (item.waiting || item.transit) ? `<div class="waiting-note" title="Tồn kế toán − chờ xuất + đi đường">KT ${item.accountingStock.toLocaleString('en-US')}${item.waiting ? ' − chờ ' + formatMrpQty(item.waiting) : ''}${item.transit ? ' + về ' + formatMrpQty(item.transit) : ''}</div>` : ''}</td>
                 ${categoryCell}
             </tr>
         `;
@@ -1977,11 +1982,12 @@ function exportToExcel() {
                 row['Nhập'] = item.nhap;
                 row['Xuất'] = item.xuat;
             }
-            if (waitingStockMode) {
-                // Xuất rõ cả 3 con số để người nhận file không nhầm tồn đã trừ với tồn kế toán.
+            if (waitingStockMode || transitStockMode) {
+                // Xuất rõ từng con số để người nhận file không nhầm tồn đã điều chỉnh với tồn kế toán.
                 row['Tồn Kế Toán'] = item.accountingStock;
-                row['Chờ Xuất'] = item.waiting || 0;
-                row['Tồn Trừ Chờ Xuất'] = item.stock;
+                if (waitingStockMode) row['Chờ Xuất'] = item.waiting || 0;
+                if (transitStockMode) row['Đi Đường'] = item.transit || 0;
+                row[stockColumnLabel()] = item.stock;
             } else {
                 row['Tồn Kho'] = item.stock;
             }
@@ -2979,7 +2985,9 @@ const mrpPendingWait = new Map(); // mãĐH -> true (muốn Chờ xuất) / fals
 const mrpSelectedForIssue = new Set(); // đơn đang tích ở tab Trạng thái để xác nhận Đã xuất hàng loạt
 const mrpExpanded = new Set();   // mã vật tư đang mở chi tiết "thuộc những đơn nào"
 let lastMrpView = null;          // bảng tổng hợp đang hiển thị - dùng cho Xuất Excel đúng lát cắt
-let waitingStockMode = false;    // công tắc: bảng tồn kho hiển thị tồn ĐÃ TRỪ vật tư chờ xuất
+let waitingStockMode = false;    // ô tích: bảng tồn kho hiển thị tồn ĐÃ TRỪ vật tư chờ xuất
+let transitStockMode = false;    // ô tích: bảng tồn kho CỘNG thêm vật tư đi đường (hàng đã đặt đang về)
+let transitRowsByKey = {};       // mãVT (chuẩn hóa) -> các dòng đang về từ file mua hàng
 let waitingById = {};            // mãVT -> tổng SL chờ xuất (chỉ tính trạng thái ĐÃ LƯU)
 let waitingOrderCount = 0;
 
@@ -3041,7 +3049,7 @@ async function loadMrpData() {
     mrpLoading = true;
     const btn = document.getElementById('btn-mrp-reload');
     if (btn) { btn.disabled = true; btn.innerText = '🔄 Đang tải...'; }
-    setMrpStatus('🕒 Đang tải dữ liệu bóc tách...');
+    setMrpStatus('🕒 Đang tải dữ liệu bóc tách...', false, '🕒 Đang tải dữ liệu mua hàng (hàng đi đường)...');
     try {
         const data = await apiPost('getMrpData', { token: currentUser.token });
         if (isUnauthorizedResponse(data)) return false;
@@ -3052,6 +3060,8 @@ async function loadMrpData() {
         mrpSelectedForIssue.clear();
         rebuildWaitingMap();
         renderMrpPanel();
+        renderTransitPanel();
+        if (waitingStockMode || transitStockMode) renderTable();
         return true;
     } catch (err) {
         console.error('Lỗi tải dữ liệu vật tư chờ xuất:', err);
@@ -3064,11 +3074,18 @@ async function loadMrpData() {
     }
 }
 
-function setMrpStatus(text, isError) {
-    const el = document.getElementById('mrp-status');
-    if (!el) return;
-    el.innerText = text;
-    el.style.color = isError ? 'var(--danger)' : '#64748b';
+// Ghi trạng thái tải ở CẢ tab Chờ xuất lẫn tab Đi đường - 2 tab dùng chung 1 lần tải dữ liệu, nếu chỉ báo
+// ở 1 tab thì tải lỗi khi đang đứng ở tab kia sẽ im lặng, người dùng không biết vì sao trống.
+// transitText: câu riêng cho tab Đi đường (VD lúc đang tải); bỏ trống = dùng chung text;
+// null = CHỈ ghi ở tab Chờ xuất (việc riêng của tab đó như lưu trạng thái đơn, giờ cập nhật bóc tách).
+function setMrpStatus(text, isError, transitText) {
+    [['mrp-status', text], ['transit-status', transitText === null ? null : (transitText || text)]].forEach(([id, msg]) => {
+        if (msg === null) return;
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.innerText = msg;
+        el.style.color = isError ? 'var(--danger)' : '#64748b';
+    });
 }
 
 function openMrpPanel() {
@@ -3081,6 +3098,105 @@ function openMrpPanel() {
 function openTransitPanel() {
     if (!hasPermission('VIEW_MRP')) return;
     showOnlyPanel('transit-panel');
+    if (mrpData) renderTransitPanel();
+    else loadMrpData();
+}
+
+// ---------------------------------------------------------------------------
+// TAB VẬT TƯ ĐI ĐƯỜNG - hàng đã đặt đang về, đọc từ file Quản lý mua hàng (IMPORTRANGE về MH_VTTB/MH_XNK/MH_VHIP)
+// ---------------------------------------------------------------------------
+let lastTransitView = null;
+function renderTransitPanel() {
+    const body = document.getElementById('transitBody');
+    if (!body) return;
+    const status = document.getElementById('transit-status');
+    if (!mrpData) { status.innerText = '🕒 Chưa tải dữ liệu.'; return; }
+    const tr = mrpData.transit || { rows: [], noCode: [], sheets: [] };
+
+    // Tình trạng từng sheet nguồn - để biết ngay sheet nào chưa import, sheet nào thiếu cột Mã vật tư.
+    const anyFound = tr.sheets.some(s => s.found);
+    document.getElementById('transit-setup-note').style.display = anyFound ? 'none' : 'block';
+    status.innerHTML = tr.sheets.map(s => !s.found
+        ? `<span style="color:var(--danger);">⚠ ${escapeHtml(s.name)}: chưa có sheet</span>`
+        : `<b>${escapeHtml(s.name.replace(/^MH_/, ''))}</b>: ${s.pending} dòng đang về` +
+          (s.noCode ? `, <span style="color:var(--danger);">${s.noCode} dòng chưa có mã</span>` : '') +
+          (s.missingCols.length ? ` <span style="color:var(--danger);">(thiếu cột: ${escapeHtml(s.missingCols.join(', '))})</span>` : '')
+    ).join(' · ');
+
+    const stockById = {};
+    flatInventoryList.forEach(item => {
+        if (isPriceSheetName(item.sheet)) return;
+        const k = normalizeMrpCode(item.id);
+        if (k && !stockById[k]) stockById[k] = item;
+    });
+    // Mã có trong bóc tách của đơn Chờ xuất - để lọc "chỉ vật tư phục vụ dự án" đúng như Mua hàng quan tâm.
+    const btKeys = new Set(computeWaitingNeeds(false).rows.map(r => r.key));
+
+    const term = normalizeMrpText(document.getElementById('transitSearch').value);
+    const onlyBt = document.getElementById('transitOnlyBt').checked;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const match = t => !term || [t.code, t.name, t.supplier, t.request, t.ref].some(v => normalizeMrpText(v).includes(term));
+
+    const rows = tr.rows.filter(t => match(t) && (!onlyBt || btKeys.has(normalizeMrpCode(t.code))))
+        .sort((a, b) => (a.etaTs || Infinity) - (b.etaTs || Infinity));
+    const noCode = tr.noCode.filter(match);
+    lastTransitView = { rows, noCode };
+
+    const overdueCount = tr.rows.filter(t => t.etaTs && t.etaTs < today.getTime()).length;
+    document.getElementById('transit-stats').innerHTML = `
+        <div class="mrp-stat"><span>Dòng đang về có mã</span><b>${tr.rows.length}</b></div>
+        <div class="mrp-stat"><span>Phục vụ đơn chờ xuất</span><b>${tr.rows.filter(t => btKeys.has(normalizeMrpCode(t.code))).length}</b></div>
+        <div class="mrp-stat mrp-stat-warning"><span>Quá ngày dự kiến</span><b>${overdueCount}</b></div>
+        <div class="mrp-stat mrp-stat-warning"><span>Đang về chưa có mã</span><b>${tr.noCode.length}</b></div>`;
+
+    body.innerHTML = !rows.length
+        ? `<tr><td colspan="8" style="color:#94a3b8; padding:20px;">${tr.rows.length ? 'Không có dòng nào khớp bộ lọc.' : 'Chưa có dòng đang về nào có mã vật tư.'}</td></tr>`
+        : rows.map(t => {
+            const item = stockById[normalizeMrpCode(t.code)];
+            const overdue = t.etaTs && t.etaTs < today.getTime();
+            const flags = [
+                !item ? '<span class="badge badge-info" title="Mã này chưa có trong danh sách tồn kho kế toán (tồn 0) - vẫn được cộng khi hàng về">Kho chưa có mã</span>' : '',
+                item && !isTransitUnitCompatible(t.unit, item.unit) ? `<span class="badge badge-warning" title="ĐVT đơn mua (${escapeHtml(t.unit)}) khác ĐVT kho (${escapeHtml(item.unit)}) - KHÔNG được cộng vào tồn">⚠ Khác ĐVT kho</span>` : '',
+                btKeys.has(normalizeMrpCode(t.code)) ? '<span class="badge badge-success" title="Mã có trong bóc tách của đơn đang Chờ xuất">Phục vụ đơn chờ</span>' : ''
+            ].join(' ');
+            return `<tr>
+                <td class="text-left font-bold">${escapeHtml(t.code)}</td>
+                <td class="text-left">${escapeHtml(t.name)} ${flags}</td>
+                <td>${escapeHtml(t.unit)}</td>
+                <td class="text-right font-bold" style="color:var(--vh-blue-dark);">${formatMrpQty(t.qty)}</td>
+                <td class="text-right" style="font-size:12px; color:#64748b;">${formatMrpQty(t.arrived)} / ${formatMrpQty(t.ordered)}</td>
+                <td class="text-left">${escapeHtml(t.supplier || '—')}</td>
+                <td>${escapeHtml(t.eta || '—')}${overdue ? ' <span class="badge badge-danger">Quá hạn</span>' : ''}</td>
+                <td class="text-left" style="font-size:12px;">${escapeHtml(t.sheet)} · dòng ${t.row}${t.request ? '<br>YCMH ' + escapeHtml(t.request) : ''}${t.ref ? '<br>' + escapeHtml(t.ref) : ''}</td>
+            </tr>`;
+        }).join('');
+
+    document.getElementById('transit-nocode-count').innerText = tr.noCode.length;
+    document.getElementById('transitNoCodeBody').innerHTML = !noCode.length
+        ? `<tr><td colspan="6" style="color:#94a3b8; padding:14px;">${tr.noCode.length ? 'Không có dòng nào khớp bộ lọc.' : '✅ Mọi dòng đang về đều đã có mã vật tư.'}</td></tr>`
+        : noCode.map(t => `<tr>
+            <td>${escapeHtml(t.sheet)} · ${t.row}</td>
+            <td class="text-left">${escapeHtml(t.name)}</td>
+            <td>${escapeHtml(t.unit)}</td>
+            <td class="text-right">${formatMrpQty(t.qty)}</td>
+            <td class="text-left">${escapeHtml(t.supplier || '—')}</td>
+            <td class="text-left" style="font-size:12px;">${t.request ? 'YCMH ' + escapeHtml(t.request) : ''}${t.ref ? ' · ' + escapeHtml(t.ref) : ''}</td>
+        </tr>`).join('');
+}
+
+function exportTransit() {
+    if (!hasPermission('VIEW_MRP')) return;
+    if (typeof XLSX === 'undefined') { showAlert('Không tải được thư viện xuất Excel (có thể do mất mạng).', 'error'); return; }
+    if (!lastTransitView || (!lastTransitView.rows.length && !lastTransitView.noCode.length)) { showAlert('Không có dữ liệu để xuất.', 'error'); return; }
+    const round = n => Math.round(Number(n) * 1000) / 1000;
+    const toRow = t => ({ 'Sheet': t.sheet, 'Dòng': t.row, 'Mã Vật Tư': t.code || '', 'Tên Vật Tư': t.name, 'ĐVT': t.unit,
+        'Còn Về': round(t.qty), 'Đã Đặt': round(t.ordered), 'Đã Về': round(t.arrived), 'NCC': t.supplier, 'Dự Kiến Về': t.eta, 'Số YCMH': t.request, 'Phục Vụ': t.ref });
+    const wb = XLSX.utils.book_new();
+    if (lastTransitView.rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lastTransitView.rows.map(toRow)), 'Dang ve');
+    // Sheet riêng "chưa có mã" - gửi thẳng cho Mua hàng bổ sung mã (có sẵn số sheet + số dòng để tìm).
+    if (lastTransitView.noCode.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lastTransitView.noCode.map(toRow)), 'Chua co ma');
+    const now = new Date(); const pad = n => String(n).padStart(2, '0');
+    XLSX.writeFile(wb, `VatTuDiDuong_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`);
 }
 
 function switchMrpSubTab(tab) {
@@ -3139,12 +3255,21 @@ function computeWaitingNeeds(includePending) {
     });
 
     const sortOrders = list => list.sort((a, b) => String(b.orderKey).localeCompare(String(a.orderKey), 'vi', { numeric: true }));
+    const transitIdx = groupTransitByCode();
     const rows = Object.values(coded).map(g => {
         const item = stockById[g.key];
         const stock = accountingStockOf(item);
-        const remain = stock - g.need;   // tồn còn lại sau khi để dành cho các đơn chờ
+        // Hàng đi đường: chỉ cộng dòng đo CÙNG KIỂU với kho (hoặc với bóc tách nếu kho chưa có mã) -
+        // mua theo kg mà kho tính theo Tấm thì cộng vào là sai, nên tách riêng để báo.
+        const baseUnit = item && item.unit ? item.unit : g.demandUnit;
+        const transitAll = transitIdx[g.key] || [];
+        const transitRows = transitAll.filter(t => isTransitUnitCompatible(t.unit, baseUnit));
+        const transitSkipped = transitAll.filter(t => !transitRows.includes(t));
+        const transit = transitRows.reduce((s, t) => s + t.qty, 0);
+        // Còn lại = Tồn kế toán − Chờ xuất + Đi đường (đi đường tính dương, bóc tách tính âm).
+        const remain = stock - g.need + transit;
         // Tồn âm (lỗi số liệu) coi như 0 khi tính thiếu - không để nó "cộng thêm" vào số cần mua.
-        let shortage = g.need - Math.max(stock, 0);
+        let shortage = g.need - Math.max(stock, 0) - transit;
         if (shortage < MRP_EPSILON) shortage = 0;
         // Không khớp mã nhưng kho có vật tư CÙNG TÊN -> gần như chắc chắn là lệch mã giữa VT BT và kế toán.
         // Chỉ gợi ý để người dùng sửa VT BT; KHÔNG tự lấy tồn theo tên vì tên trùng vẫn có thể khác vật tư.
@@ -3155,15 +3280,16 @@ function computeWaitingNeeds(includePending) {
             const k = normalizeMrpUnit(o.unit);
             (unitGroups[k] = unitGroups[k] || { label: o.unit || '(trống)', orders: [] }).orders.push(o.orderKey);
         });
-        const baseUnit = item && item.unit ? normalizeMrpUnit(item.unit) : null;
+        const stockUnitKey = item && item.unit ? normalizeMrpUnit(item.unit) : null;
         const unitKeys = Object.keys(unitGroups);
-        const unitMismatch = baseUnit ? unitKeys.some(k => k !== baseUnit) : unitKeys.length > 1;
+        const unitMismatch = stockUnitKey ? unitKeys.some(k => k !== stockUnitKey) : unitKeys.length > 1;
         const unitDetail = unitKeys.map(k => `${unitGroups[k].label}: ${unitGroups[k].orders.join(', ')}`).join(' · ');
         return {
             nameHintCode: nameHint ? String(nameHint.id).trim() : '',
             // Hiển thị đúng mã như bên kho (nếu khớp được) để người xem tra cứu tiếp không bị lệch ký tự.
             code: item ? String(item.id).trim() : g.code, key: g.key, name: item ? item.name : g.demandName, unit: item ? item.unit : g.demandUnit,
             demandUnit: g.demandUnit, need: g.need, stock, remain, shortage, inStockList: !!item,
+            transit, transitRows, transitSkipped,
             // ĐVT bóc tách khác ĐVT kho (VD Bộ vs Kg) thì phép trừ vô nghĩa - đánh dấu để người xem kiểm tra.
             unitMismatch, unitDetail,
             orders: sortOrders(g.orders)
@@ -3180,7 +3306,23 @@ function computeWaitingNeeds(includePending) {
     const noCodeRows = Object.values(noCode).map(g => Object.assign(g, { orders: sortOrders(g.orders) }))
         .sort((a, b) => String(a.name).localeCompare(String(b.name), 'vi'));
 
-    return { rows, noCodeRows, orderCount: Object.keys(waitingOrders).length };
+    return { rows, noCodeRows, orderCount: Object.keys(waitingOrders).length, orderKeys: Object.keys(waitingOrders).sort() };
+}
+
+// Hàng đi đường gom theo mã (đã chuẩn hóa như mọi chỗ so mã khác: 2 loại chữ Đ, ký tự vô hình...).
+function groupTransitByCode() {
+    const idx = {};
+    ((mrpData && mrpData.transit && mrpData.transit.rows) || []).forEach(t => {
+        const k = normalizeMrpCode(t.code);
+        if (k) (idx[k] = idx[k] || []).push(t);
+    });
+    return idx;
+}
+
+// Đơn mua ghi ĐVT trống thì tin theo mã; còn lại phải cùng cách đo (cái = chiếc = viên, m = mét...).
+function isTransitUnitCompatible(transitUnit, baseUnit) {
+    if (!transitUnit || !baseUnit) return true;
+    return normalizeMrpUnit(transitUnit) === normalizeMrpUnit(baseUnit);
 }
 
 // Dựng lại bảng "mã -> SL chờ xuất" từ trạng thái ĐÃ LƯU, rồi áp lại công tắc tồn kho nếu đang bật.
@@ -3193,6 +3335,7 @@ function rebuildWaitingMap() {
         res.rows.forEach(r => { waitingById[r.key] = r.need; });
         waitingOrderCount = res.orderCount;
     }
+    transitRowsByKey = groupTransitByCode();
     applyWaitingStockMode();
 }
 
@@ -3202,51 +3345,77 @@ function rebuildWaitingMap() {
 function applyWaitingStockMode() {
     flatInventoryList.forEach(item => {
         if (!Number.isFinite(item.accountingStock)) item.accountingStock = item.stock;
-        const waiting = (!isPriceSheetName(item.sheet) && waitingStockMode) ? (waitingById[normalizeMrpCode(item.id)] || 0) : 0;
+        const isStock = !isPriceSheetName(item.sheet);
+        const key = normalizeMrpCode(item.id);
+        const waiting = (isStock && waitingStockMode) ? (waitingById[key] || 0) : 0;
+        // Đi đường chỉ cộng dòng cùng cách đo với kho (VD kho tính Tấm thì không cộng dòng mua theo kg).
+        const transit = (isStock && transitStockMode)
+            ? (transitRowsByKey[key] || []).filter(t => isTransitUnitCompatible(t.unit, item.unit)).reduce((s, t) => s + t.qty, 0)
+            : 0;
         item.waiting = waiting;
-        item.stock = waitingStockMode ? item.accountingStock - waiting : item.accountingStock;
+        item.transit = transit;
+        item.stock = item.accountingStock - waiting + transit;
     });
     updateWaitingStockUi();
 }
 
+// Tiêu đề cột tồn trên bảng tồn kho, theo 2 ô tích đang bật.
+function stockColumnLabel() {
+    if (waitingStockMode && transitStockMode) return 'Tồn Khả Dụng';
+    if (waitingStockMode) return 'Tồn Trừ Chờ Xuất';
+    if (transitStockMode) return 'Tồn + Đi Đường';
+    return 'Tồn Kho';
+}
+
 function updateWaitingStockUi() {
     // Ô tích luôn phản ánh đúng chế độ đang áp dụng (kể cả khi bật thất bại thì tự bỏ tích lại).
-    const box = document.getElementById('chkWaitingStock');
-    if (box) box.checked = waitingStockMode;
-    const wrap = document.getElementById('btn-toggle-waiting-stock');
-    if (wrap) wrap.classList.toggle('active', waitingStockMode);
+    [['chkWaitingStock', 'btn-toggle-waiting-stock', waitingStockMode], ['chkTransitStock', 'btn-toggle-transit-stock', transitStockMode]].forEach(([boxId, wrapId, on]) => {
+        const box = document.getElementById(boxId);
+        if (box) box.checked = on;
+        const wrap = document.getElementById(wrapId);
+        if (wrap) wrap.classList.toggle('active', on);
+    });
     const banner = document.getElementById('waiting-stock-banner');
     if (banner) {
-        banner.style.display = waitingStockMode ? 'block' : 'none';
-        banner.innerText = `🧮 Đang xem tồn kho ĐÃ TRỪ vật tư chờ xuất của ${waitingOrderCount} đơn hàng (chưa cộng vật tư đi đường). ` +
-            `Màu cảnh báo Min/Max, thống kê, Cần đặt hàng và Xuất Excel đều theo số này. Bấm lại nút để về số liệu kế toán.`;
+        const any = waitingStockMode || transitStockMode;
+        banner.style.display = any ? 'block' : 'none';
+        const parts = [];
+        if (waitingStockMode) parts.push(`ĐÃ TRỪ vật tư chờ xuất của ${waitingOrderCount} đơn hàng`);
+        if (transitStockMode) parts.push('ĐÃ CỘNG vật tư đi đường (hàng đã đặt đang về)');
+        banner.innerText = `🧮 Đang xem tồn kho ${parts.join(' và ')}. Màu cảnh báo Min/Max, thống kê, Cần đặt hàng và Xuất Excel đều theo số này. Bỏ tích để về số liệu kế toán.`;
     }
 }
 
-async function toggleWaitingStockMode() {
+// kind = 'waiting' (Trừ chờ xuất) | 'transit' (Cộng đi đường). 2 ô tích độc lập, bật được cùng lúc.
+async function toggleStockAdjust(kind) {
     if (!hasPermission('VIEW_MRP')) return;
-    if (!waitingStockMode && !mrpData) {
-        // Lần đầu bật mà chưa có dữ liệu chờ xuất -> tải trước, lỗi thì không bật (tránh hiển thị số sai).
-        const box = document.getElementById('chkWaitingStock');
-        const wrap = document.getElementById('btn-toggle-waiting-stock');
-        const text = document.getElementById('waiting-toggle-text');
+    const isWaiting = kind === 'waiting';
+    const turningOn = isWaiting ? !waitingStockMode : !transitStockMode;
+    if (turningOn && !mrpData) {
+        // Lần đầu bật mà chưa có dữ liệu -> tải trước, lỗi thì không bật (tránh hiển thị số sai).
+        const box = document.getElementById(isWaiting ? 'chkWaitingStock' : 'chkTransitStock');
+        const wrap = document.getElementById(isWaiting ? 'btn-toggle-waiting-stock' : 'btn-toggle-transit-stock');
+        const text = document.getElementById(isWaiting ? 'waiting-toggle-text' : 'transit-toggle-text');
+        const normal = text ? text.innerText : '';
         if (box) box.disabled = true;
         if (wrap) wrap.classList.add('is-loading');
-        if (text) text.innerText = 'Đang tải vật tư chờ...';
+        if (text) text.innerText = 'Đang tải dữ liệu...';
         const ok = await loadMrpData();
         if (box) box.disabled = false;
         if (wrap) wrap.classList.remove('is-loading');
-        if (text) text.innerText = 'Tồn đã trừ chờ xuất';
+        if (text) text.innerText = normal;
         if (!ok) {
             updateWaitingStockUi();
-            showAlert('Không tải được dữ liệu vật tư chờ xuất nên chưa bật được chế độ này. Anh/chị thử lại sau.', 'error');
+            showAlert('Không tải được dữ liệu nên chưa bật được chế độ này. Anh/chị thử lại sau.', 'error');
             return;
         }
     }
-    waitingStockMode = !waitingStockMode;
+    if (isWaiting) waitingStockMode = !waitingStockMode;
+    else transitStockMode = !transitStockMode;
     applyWaitingStockMode();
     renderTable();
 }
+function toggleWaitingStockMode() { return toggleStockAdjust('waiting'); }
 
 // ---------------------------------------------------------------------------
 // GHI TRẠNG THÁI
@@ -3256,13 +3425,13 @@ async function submitOrderStatusChanges(changes, successText) {
     mrpSaving = true;
     // Vẽ lại ngay để nút Lưu / Xác nhận hiện vòng quay + khóa mọi ô tích, nút thao tác trong lúc chờ máy chủ.
     renderMrpPanel();
-    setMrpStatus('💾 Đang lưu...');
+    setMrpStatus('💾 Đang lưu...', false, null);
     try {
         const data = await apiPost('updateOrderStatus', { token: currentUser.token, changes });
         if (isUnauthorizedResponse(data)) return false;
         if (!data || !data.success) {
             showAlert((data && data.error) || 'Lưu thất bại.', 'error');
-            setMrpStatus('❌ Chưa lưu được thay đổi.', true);
+            setMrpStatus('❌ Chưa lưu được thay đổi.', true, null);
             return false;
         }
         const updated = data.statuses || {};
@@ -3279,7 +3448,7 @@ async function submitOrderStatusChanges(changes, successText) {
     } catch (err) {
         console.error('Lỗi lưu trạng thái đơn:', err);
         showAlert('Không kết nối được máy chủ, thay đổi chưa được lưu.', 'error');
-        setMrpStatus('❌ Không kết nối được máy chủ.', true);
+        setMrpStatus('❌ Không kết nối được máy chủ.', true, null);
         return false;
     } finally {
         mrpSaving = false;
@@ -3350,8 +3519,8 @@ function renderMrpPanel() {
     document.getElementById('mrp-sub-status').style.display = mrpSubTab === 'status' ? 'block' : 'none';
     document.getElementById('mrp-sub-pick').style.display = mrpSubTab === 'pick' ? 'block' : 'none';
 
-    if (!mrpData) { setMrpStatus('🕒 Chưa tải dữ liệu bóc tách.'); return; }
-    setMrpStatus(`🕒 ${mrpData.lastRead ? 'Bóc tách cập nhật lúc ' + mrpData.lastRead : 'Chưa rõ thời điểm cập nhật bóc tách'} · Tồn kho theo lần tải gần nhất của trang`);
+    if (!mrpData) { setMrpStatus('🕒 Chưa tải dữ liệu bóc tách.', false, null); return; }
+    setMrpStatus(`🕒 ${mrpData.lastRead ? 'Bóc tách cập nhật lúc ' + mrpData.lastRead : 'Chưa rõ thời điểm cập nhật bóc tách'} · Tồn kho theo lần tải gần nhất của trang`, false, null);
 
     // Số đếm theo trạng thái ĐÃ LƯU - hiện ở cả 2 tab nhánh.
     const counts = { [MRP_ST.NEW]: 0, [MRP_ST.WAIT]: 0, [MRP_ST.DONE]: 0 };
@@ -3464,7 +3633,7 @@ function renderMrpWaitingSummary(pendingCount) {
         || r.orders.some(o => normalizeMrpText(o.orderKey).includes(term));
     const visibleRows = result.rows.filter(r => matchTerm(r) && (!onlyShort || r.shortage > 0));
     const visibleNoCode = result.noCodeRows.filter(matchTerm);
-    lastMrpView = { rows: visibleRows, noCodeRows: visibleNoCode };
+    lastMrpView = { rows: visibleRows, noCodeRows: visibleNoCode, orderKeys: result.orderKeys, pendingCount, filtered: !!term || onlyShort };
 
     const shortCount = result.rows.filter(r => r.shortage > 0).length;
     document.getElementById('mrp-summary-caption').innerHTML =
@@ -3474,7 +3643,7 @@ function renderMrpWaitingSummary(pendingCount) {
 
     const tbody = document.getElementById('mrpTableBody');
     if (!visibleRows.length) {
-        tbody.innerHTML = `<tr><td colspan="7" style="color:#94a3b8; padding:20px;">${
+        tbody.innerHTML = `<tr><td colspan="8" style="color:#94a3b8; padding:20px;">${
             result.orderCount === 0 ? 'Chưa có đơn nào ở trạng thái Chờ xuất.'
             : result.rows.length === 0 ? 'Các đơn Chờ xuất chưa có vật tư nào có mã kho.'
             : onlyShort && !term ? '✅ Tồn kho đủ cho mọi mã của các đơn Chờ xuất.' : 'Không có mã nào khớp bộ lọc.'}</td></tr>`;
@@ -3485,7 +3654,8 @@ function renderMrpWaitingSummary(pendingCount) {
                 !r.inStockList ? (r.nameHintCode
                     ? `<span class="badge badge-warning" title="Mã bóc tách không có trong kho, nhưng kho có vật tư cùng tên với mã khác - kiểm tra lại mã trong sheet VT BT. Đang tính tồn = 0.">⚠ Kho có tên này với mã ${escapeHtml(r.nameHintCode)}</span>`
                     : '<span class="badge badge-info" title="Kho hiện không có mã này (báo cáo tồn kho kế toán không có dòng của mã) - tính tồn = 0, toàn bộ số chờ xuất là phần cần mua">Tồn 0 · kho chưa có</span>') : '',
-                r.unitMismatch ? `<span class="badge badge-warning" title="ĐVT kho: ${escapeHtml(r.inStockList ? r.unit : '(không có)')} | ĐVT bóc tách theo đơn - ${escapeHtml(r.unitDetail)}. Sửa trong sheet VT BT rồi Tổng hợp lại các đơn này.">⚠ ĐVT khác</span>` : ''
+                r.unitMismatch ? `<span class="badge badge-warning" title="ĐVT kho: ${escapeHtml(r.inStockList ? r.unit : '(không có)')} | ĐVT bóc tách theo đơn - ${escapeHtml(r.unitDetail)}. Sửa trong sheet VT BT rồi Tổng hợp lại các đơn này.">⚠ ĐVT khác</span>` : '',
+                r.transitSkipped.length ? `<span class="badge badge-warning" title="Có ${r.transitSkipped.length} dòng đang về ghi ĐVT ${escapeHtml(r.transitSkipped.map(t => t.unit).join(', '))} - khác ĐVT ${escapeHtml(r.unit)}, KHÔNG được cộng. Kiểm tra lại đơn mua.">⚠ Đi đường khác ĐVT</span>` : ''
             ].join(' ');
             const main = `
                 <tr class="mrp-row${open ? ' is-open' : ''}" data-mrp-code="${escapeHtml(r.code)}">
@@ -3494,11 +3664,12 @@ function renderMrpWaitingSummary(pendingCount) {
                     <td>${escapeHtml(r.unit)}</td>
                     <td class="text-right">${formatMrpQty(r.stock)}</td>
                     <td class="text-right font-bold">${formatMrpQty(r.need)}</td>
+                    <td class="text-right" style="color:var(--vh-blue-dark); font-weight:700;">${r.transit > 0 ? formatMrpQty(r.transit) : '<span style="color:#cbd5e1;">—</span>'}</td>
                     <td class="text-right font-bold" style="color:${r.remain < -MRP_EPSILON ? 'var(--warning)' : 'var(--vh-green-dark)'};">${formatMrpQty(Math.abs(r.remain) < MRP_EPSILON ? 0 : r.remain)}</td>
                     <td>${r.orders.length}</td>
                 </tr>`;
             // Mã khớp kho -> hiện ĐVT kế toán cho mọi đơn (kế toán là chuẩn); chưa khớp mới hiện ĐVT từng đơn.
-            const detail = open ? `<tr class="mrp-detail-row"><td colspan="7">${renderMrpOrderDetail(r.orders, r.inStockList ? r.unit : r.demandUnit, r.inStockList)}</td></tr>` : '';
+            const detail = open ? `<tr class="mrp-detail-row"><td colspan="8">${renderMrpOrderDetail(r.orders, r.inStockList ? r.unit : r.demandUnit, r.inStockList)}${renderMrpTransitDetail(r)}</td></tr>` : '';
             return main + detail;
         }).join('');
     }
@@ -3528,6 +3699,28 @@ function renderMrpOrderDetail(orders, unit, useStockUnit) {
         </tr></thead><tbody>${lines}</tbody></table>`;
 }
 
+// Chi tiết hàng đang về của 1 mã (khi mở dòng ở bảng tổng hợp) - để biết về từ đơn mua nào, bao giờ, có kịp không.
+function renderMrpTransitDetail(r) {
+    const list = r.transitRows.concat(r.transitSkipped);
+    if (!list.length) return '';
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const lines = list.map(t => {
+        const skipped = r.transitSkipped.includes(t);
+        const overdue = t.etaTs && t.etaTs < today.getTime();
+        return `<tr style="${skipped ? 'opacity:0.55;' : ''}">
+            <td class="text-left">${escapeHtml(t.sheet)} · dòng ${t.row}${t.request ? ' · YCMH ' + escapeHtml(t.request) : ''}</td>
+            <td class="text-left">${escapeHtml(t.supplier || '—')}</td>
+            <td class="text-left mrp-project-cell">${escapeHtml(t.ref || '')}</td>
+            <td>${escapeHtml(t.eta || '—')}${overdue ? ' <span class="badge badge-danger">Quá hạn</span>' : ''}</td>
+            <td class="text-right font-bold">${formatMrpQty(t.qty)} ${escapeHtml(t.unit || '')}${skipped ? ' <span class="badge badge-warning">khác ĐVT, không cộng</span>' : ''}</td>
+        </tr>`;
+    }).join('');
+    return `<div style="margin-top:10px; font-size:12.5px; font-weight:700; color:var(--vh-blue-dark);">🚚 Hàng đang về</div>
+        <table class="mrp-detail-table"><thead><tr>
+        <th class="text-left">Nguồn</th><th class="text-left">NCC</th><th class="text-left">Phục vụ</th><th>Dự kiến về</th><th class="text-right">Còn về</th>
+        </tr></thead><tbody>${lines}</tbody></table>`;
+}
+
 function renderMrpWarnings() {
     const counts = mrpData.warnCounts || {};
     const totalWarn = Object.values(counts).reduce((s, n) => s + n, 0);
@@ -3552,7 +3745,12 @@ function toggleMrpRow(code) {
 function bindMrpEvents(on) {
     on('btn-open-mrp', 'click', openMrpPanel);
     on('btn-open-transit', 'click', openTransitPanel);
-    on('chkWaitingStock', 'change', toggleWaitingStockMode);
+    on('chkWaitingStock', 'change', () => toggleStockAdjust('waiting'));
+    on('chkTransitStock', 'change', () => toggleStockAdjust('transit'));
+    on('btn-transit-reload', 'click', loadMrpData);
+    on('transitSearch', 'input', renderTransitPanel);
+    on('transitOnlyBt', 'change', renderTransitPanel);
+    on('btn-export-transit', 'click', exportTransit);
     on('btn-mrp-reload', 'click', loadMrpData);
     on('btn-mrp-subtab-status', 'click', () => switchMrpSubTab('status'));
     on('btn-mrp-subtab-pick', 'click', () => switchMrpSubTab('pick'));
@@ -3613,6 +3811,17 @@ function bindMrpEvents(on) {
     }
 }
 
+// Đơn vị đếm nguyên chiếc (tấm, cây, cái, bộ...) -> đề xuất mua làm tròn LÊN số nguyên (0,54 tấm thì phải mua 1 tấm).
+// Đơn vị đo liên tục (kg, m, lít...) giữ số lẻ, chỉ làm tròn lên 2 chữ số.
+const MRP_WHOLE_UNITS = new Set(['chiec', 'tam', 'cay', 'bo', 'cuon', 'binh', 'tuyp', 'tuyt', 'lo', 'hop', 'thanh', 'hat', 'tui', 'bao', 'chai', 'cot', 'thung', 'doi', 'set']);
+function roundUpPurchase(qty, unit) {
+    if (!(qty > 0)) return 0;
+    if (MRP_WHOLE_UNITS.has(normalizeMrpUnit(unit))) return Math.ceil(qty - 1e-9);
+    return Math.ceil(qty * 100 - 1e-9) / 100;
+}
+
+// Mẫu "Đề xuất mua vật tư" do app tự tạo (chưa theo mẫu YCMH riêng của Mua hàng - khi họ cần thì chỉnh sau).
+// Thư viện Excel bản miễn phí không tô màu/in đậm được, nên bố cục dựa vào dòng tiêu đề, gộp ô và độ rộng cột.
 function exportMrp() {
     if (!hasPermission('VIEW_MRP')) return;
     if (typeof XLSX === 'undefined') {
@@ -3624,16 +3833,56 @@ function exportMrp() {
         return;
     }
     const round = n => Math.round(Number(n) * 1000) / 1000;
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const nowText = `${pad(now.getHours())}:${pad(now.getMinutes())} ${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()}`;
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const noteOf = r => [
+        !r.inStockList ? (r.nameHintCode ? `Lệch mã - kho có tên này với mã ${r.nameHintCode}` : 'Kho chưa có mã này') : '',
+        r.unitMismatch ? `ĐVT lệch - kho: ${r.inStockList ? r.unit : '(không có)'}; bóc tách: ${r.unitDetail}` : '',
+        r.transitSkipped.length ? `Có ${r.transitSkipped.length} dòng đi đường khác ĐVT, không cộng` : '',
+        r.transitRows.some(t => t.etaTs && t.etaTs < today.getTime()) ? 'Có hàng đi đường quá ngày dự kiến' : ''
+    ].filter(Boolean).join('; ');
+
+    // ---------- Sheet 1: ĐỀ XUẤT MUA (chỉ mã còn thiếu SAU KHI đã cộng hàng đi đường) ----------
+    const shortRows = lastMrpView.rows.filter(r => r.shortage > 0);
+    const HEAD = ['STT', 'Mã vật tư', 'Tên vật tư', 'ĐVT', 'Tồn kế toán', 'Chờ xuất', 'Đi đường', 'Thiếu', 'Đề xuất mua', 'Phục vụ đơn', 'Ghi chú'];
+    const aoa = [
+        ['ĐỀ XUẤT MUA VẬT TƯ - THEO ĐƠN HÀNG CHỜ XUẤT'],
+        [`Ngày lập: ${nowText}     Người lập: ${(currentUser && (currentUser.name || currentUser.email)) || ''}`],
+        [`Căn cứ: ${lastMrpView.orderKeys.length} đơn Chờ xuất (${lastMrpView.orderKeys.join(', ')})` +
+            (lastMrpView.pendingCount ? ` - GỒM ${lastMrpView.pendingCount} thay đổi CHƯA LƯU` : '') +
+            (lastMrpView.filtered ? ' - theo bộ lọc đang xem trên app' : '')],
+        ['Thiếu = Chờ xuất − Tồn kế toán − Đi đường. Đề xuất mua: làm tròn lên số nguyên với đơn vị đếm (tấm, cây, cái, bộ...).'],
+        [],
+        HEAD
+    ];
+    let stt = 0;
+    shortRows.forEach(r => aoa.push([++stt, r.code, r.name, r.unit, round(r.stock), round(r.need), round(r.transit),
+        round(r.shortage), roundUpPurchase(r.shortage, r.unit), r.orders.map(o => o.orderKey).join(', '), noteOf(r)]));
+    // Vật tư chưa có mã: kho chưa từng có, không có hàng đi đường khớp được -> cần mua toàn bộ.
+    lastMrpView.noCodeRows.forEach(g => aoa.push([++stt, '(chưa có mã)', g.name, g.unit, 0, round(g.need), 0,
+        round(g.need), roundUpPurchase(g.need, g.unit), g.orders.map(o => o.orderKey).join(', '), 'Vật tư chưa có mã kho - kiểm tra VT BT']));
+    if (!stt) aoa.push(['', '', '✅ Không có vật tư nào cần mua thêm - tồn kho và hàng đi đường đủ cho các đơn Chờ xuất.']);
+    aoa.push([], [], ['', 'Người lập', '', '', 'Trưởng phòng KH - MH', '', '', '', 'Giám đốc']);
+    const ws1 = XLSX.utils.aoa_to_sheet(aoa);
+    ws1['!merges'] = [0, 1, 2, 3].map(r => ({ s: { r, c: 0 }, e: { r, c: HEAD.length - 1 } }));
+    ws1['!cols'] = [5, 14, 42, 7, 11, 11, 11, 11, 12, 22, 40].map(w => ({ wch: w }));
+
+    // ---------- Sheet 2: cân đối đầy đủ như trên màn hình ----------
     const summary = lastMrpView.rows.map(r => ({
         'Mã Vật Tư': r.code, 'Tên Vật Tư': r.name, 'ĐVT': r.unit,
-        'Tồn Kế Toán': round(r.stock), 'Chờ Xuất': round(r.need), 'Còn Lại': round(r.remain),
-        'Số Đơn': r.orders.length,
-        'Ghi Chú': [!r.inStockList ? (r.nameHintCode ? `Lệch mã - kho có tên này với mã ${r.nameHintCode}` : 'Tồn 0 - kho chưa có') : '', r.unitMismatch ? `ĐVT lệch - kho: ${r.inStockList ? r.unit : '(không có)'}; bóc tách: ${r.unitDetail}` : ''].filter(Boolean).join('; ')
+        'Tồn Kế Toán': round(r.stock), 'Chờ Xuất': round(r.need), 'Đi Đường': round(r.transit), 'Còn Lại': round(r.remain),
+        'Số Đơn': r.orders.length, 'Ghi Chú': noteOf(r)
     }));
-    const noCode = lastMrpView.noCodeRows.map(g => ({
-        'Tên Vật Tư': g.name, 'ĐVT': g.unit, 'Cần Mua': round(g.need),
-        'Các Đơn': g.orders.map(o => `${o.orderKey}: ${round(o.qty)}`).join('; ')
+    lastMrpView.noCodeRows.forEach(g => summary.push({
+        'Mã Vật Tư': '(chưa có mã)', 'Tên Vật Tư': g.name, 'ĐVT': g.unit, 'Tồn Kế Toán': 0, 'Chờ Xuất': round(g.need),
+        'Đi Đường': 0, 'Còn Lại': -round(g.need), 'Số Đơn': g.orders.length, 'Ghi Chú': 'Vật tư chưa có mã kho'
     }));
+    const ws2 = XLSX.utils.json_to_sheet(summary);
+    ws2['!cols'] = [14, 42, 7, 12, 11, 11, 11, 8, 45].map(w => ({ wch: w }));
+
+    // ---------- Sheet 3: chi tiết từng cặp đơn × vật tư ----------
     const detail = [];
     lastMrpView.rows.forEach(r => r.orders.forEach(o => detail.push({
         'Mã ĐH': o.orderKey, 'Mã Vật Tư': r.code, 'Tên Vật Tư': r.name, 'ĐVT': r.inStockList ? r.unit : (o.unit || r.demandUnit), 'SL Chờ Xuất': round(o.qty), 'Sản Phẩm': o.product, 'Dự Án': o.project
@@ -3641,14 +3890,14 @@ function exportMrp() {
     lastMrpView.noCodeRows.forEach(g => g.orders.forEach(o => detail.push({
         'Mã ĐH': o.orderKey, 'Mã Vật Tư': '(chưa có mã)', 'Tên Vật Tư': g.name, 'ĐVT': g.unit, 'SL Chờ Xuất': round(o.qty), 'Sản Phẩm': o.product, 'Dự Án': o.project
     })));
+    const ws3 = XLSX.utils.json_to_sheet(detail);
+    ws3['!cols'] = [9, 14, 42, 7, 12, 22, 50].map(w => ({ wch: w }));
 
     const workbook = XLSX.utils.book_new();
-    if (summary.length) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(summary), 'Cho xuat theo ma');
-    if (noCode.length) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(noCode), 'Chua co ma');
-    if (detail.length) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(detail), 'Chi tiet theo don');
-    const now = new Date();
-    const pad = n => String(n).padStart(2, '0');
-    XLSX.writeFile(workbook, `VatTuChoXuat_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, ws1, 'De xuat mua');
+    if (summary.length) XLSX.utils.book_append_sheet(workbook, ws2, 'Can doi day du');
+    if (detail.length) XLSX.utils.book_append_sheet(workbook, ws3, 'Chi tiet theo don');
+    XLSX.writeFile(workbook, `DeXuatMuaVatTu_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.xlsx`);
 }
 
 // ============================================================================
