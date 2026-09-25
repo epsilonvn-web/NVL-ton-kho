@@ -259,6 +259,49 @@
         .badge-danger { background: #f8d7da; color: #721c24; }
         .badge-info { background: #dceefa; color: var(--vh-blue-dark); }
 
+        /* VẬT TƯ CHỜ XUẤT / ĐI ĐƯỜNG */
+        .mrp-note { background: #fff8e6; border: 1px solid #f5d98b; color: #7a5a00; padding: 10px 14px; border-radius: 8px; font-size: 12.5px; line-height: 1.5; margin: 0 0 12px 0; }
+        .mrp-hint { font-size: 12.5px; color: #64748b; margin: 0 0 12px 0; line-height: 1.5; }
+        .mrp-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 10px 0 15px 0; }
+        .mrp-stat { background: #f8fafc; border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 14px; }
+        .mrp-stat span { display: block; font-size: 12px; color: var(--text-muted); font-weight: 600; }
+        .mrp-stat b { font-size: 22px; color: var(--vh-navy); }
+        .mrp-stat-warning b { color: var(--danger); }
+        .mrp-stat-success b { color: var(--vh-green-dark); }
+        .mrp-subtabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 4px 0 16px 0; padding-bottom: 12px; border-bottom: 2px solid #f1f5f9; }
+        .mrp-subtabs .btn-refresh { font-size: 13.5px; padding: 8px 16px; }
+        .mrp-action-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 12px 0; }
+        .mrp-select { max-width: 200px; margin-bottom: 0; }
+        .mrp-toggle { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: var(--vh-dark); cursor: pointer; white-space: nowrap; }
+        .mrp-action-btn { padding: 4px 10px; min-height: 28px; font-size: 12px; }
+        .mrp-pick-list { max-height: 420px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px; }
+        .mrp-pending-row td { background: #fff8e6; }
+        .mrp-row { cursor: pointer; }
+        .mrp-row:hover td { background: #f1f7fc; }
+        .mrp-row.is-open td { background: #eaf3fb; }
+        .mrp-detail-row > td { background: #f8fafc; padding: 8px 12px 12px 28px !important; }
+        .mrp-detail-table { width: 100%; font-size: 12.5px; }
+        .mrp-detail-table th { background: #eef2f6 !important; font-size: 12px; }
+        .mrp-project-cell { max-width: 320px; white-space: normal; }
+        .mrp-subtitle { font-size: 15px; color: var(--vh-navy); margin: 24px 0 6px 0; }
+        .mrp-details { margin-top: 20px; border: 1px solid var(--border-color); border-radius: 10px; padding: 10px 14px; background: #fff; }
+        .mrp-details summary { cursor: pointer; font-weight: 700; font-size: 13.5px; color: var(--vh-navy); }
+        .waiting-stock-banner { background: #eaf4fb; border: 1px solid #b9d9ef; color: var(--vh-blue-dark); padding: 9px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600; margin-bottom: 12px; }
+        /* Bảng tổng hợp vật tư chờ xuất: cuộn trong khung riêng, hàng tiêu đề luôn hiện.
+           Chỉ ghim tiêu đề của bảng chính (> table > thead), không ghim bảng con khi mở chi tiết đơn. */
+        .mrp-summary-scroll { max-height: 70vh; overflow: auto; border: 1px solid var(--border-color); border-radius: 8px; }
+        .mrp-summary-scroll > table > thead th { position: sticky; top: 0; z-index: 3; box-shadow: 0 2px 0 var(--vh-blue); }
+        .waiting-note { font-size: 11px; font-weight: 600; color: #94a3b8; white-space: nowrap; }
+        .waiting-toggle { display: inline-flex; align-items: center; gap: 7px; background: #fff; border: 1.5px solid #cfe3ef; color: var(--vh-blue-dark); padding: 7px 14px; min-height: 32px; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; white-space: nowrap; user-select: none; transition: 0.15s ease; }
+        .waiting-toggle:hover { background: #eaf4fb; border-color: var(--vh-blue); }
+        .waiting-toggle input { width: 16px; height: 16px; margin: 0; cursor: pointer; accent-color: var(--vh-blue); }
+        .waiting-toggle.active { background: #eaf4fb; border-color: var(--vh-blue); }
+        .waiting-toggle.is-loading { opacity: 0.6; cursor: wait; }
+        /* Nút đang chờ máy chủ: mờ + vòng quay, chặn bấm lần 2 */
+        .btn-busy { opacity: 0.6; cursor: wait !important; pointer-events: none; }
+        .btn-spinner { display: inline-block; width: 14px; height: 14px; margin-right: 7px; vertical-align: -2px; border: 2px solid rgba(255,255,255,0.45); border-top-color: #fff; border-radius: 50%; animation: btnSpin 0.8s linear infinite; }
+        @keyframes btnSpin { to { transform: rotate(360deg); } }
+
         /* TÌM KIẾM */
         .form-control { width: 100%; padding: 10px 12px; min-height: 44px; border: 1.5px solid var(--border-color); border-radius: 8px; box-sizing: border-box; font-size: 14px; outline: none; transition: 0.2s ease; }
         .form-control:focus { border-color: var(--vh-blue); box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.15); }
@@ -647,6 +690,8 @@
                 <button type="button" class="btn-refresh" id="btn-open-threshold">⚠️ Cảnh báo tồn kho</button>
                 <button type="button" class="btn-refresh" id="btn-open-reorder">🛒 Cần Đặt Hàng</button>
                 <button type="button" class="btn-refresh" id="btn-open-stagnant">📦 Hàng Tồn Đọng</button>
+                <button type="button" class="btn-refresh" id="btn-open-mrp" style="display:none;">⏳ Vật Tư Chờ Xuất</button>
+                <button type="button" class="btn-refresh" id="btn-open-transit" style="display:none;">🚚 Vật Tư Đi Đường</button>
                 <button type="button" class="btn-refresh" id="btn-refresh-data" >🔄 Làm mới dữ liệu</button>
             </div>
         </div>
@@ -703,6 +748,10 @@
                 <input type="text" id="searchInput" class="form-control search-bar" placeholder="Tra cứu mã vật tư, tên vật tư..." >
                 <button type="button" class="btn-refresh" id="btn-toggle-movement" >📊 Hiện Tồn Đầu/Nhập/Xuất</button>
                 <button type="button" class="btn-refresh" id="btn-toggle-chart"  style="display:none;">📈 Xem Biểu Đồ Top Tồn Kho</button>
+                <!-- Ô tích (không dùng nút đổi chữ) để nhìn là biết ngay đang ở chế độ nào -->
+                <label class="waiting-toggle" id="btn-toggle-waiting-stock" style="display:none;" title="Chỉ đổi cách hiển thị, không thay đổi số liệu kế toán">
+                    <input type="checkbox" id="chkWaitingStock"> <span id="waiting-toggle-text">Tồn đã trừ chờ xuất</span>
+                </label>
                 <button type="button" class="btn-export" id="btn-export-inventory">📥 Xuất Excel</button>
             </div>
 
@@ -711,6 +760,9 @@
             <!-- Biểu đồ Top tồn kho nhiều nhất - ẩn mặc định để giữ giao diện gọn, chỉ hiện khi anh chủ động
                  bấm xem. Tự động phản ánh đúng bộ lọc (tìm kiếm/hashtag) đang áp dụng trong tab hiện tại. -->
             <div id="stock-chart-container" style="display:none; margin-bottom:20px;"></div>
+
+            <!-- Hiện khi bật công tắc "Tồn đã trừ chờ xuất" - nhắc rõ đang KHÔNG xem số kế toán -->
+            <div id="waiting-stock-banner" class="waiting-stock-banner" style="display:none;"></div>
 
             <div class="table-responsive">
                 <table>
@@ -895,6 +947,154 @@
                 <button type="button" class="btn-export" id="btn-export-reorder">📥 Xuất Excel Danh Sách Cần Đặt</button>
             </div>
         </div>
+
+        <!-- PANEL VẬT TƯ CHỜ XUẤT - trạng thái đơn hàng + chọn đơn chờ xuất -->
+        <div class="panel" id="mrp-panel" style="display:none;">
+            <h3 class="panel-title">
+                <span>⏳ Vật Tư Chờ Xuất</span>
+                <button type="button" class="btn-refresh" id="btn-mrp-reload">🔄 Tải lại dữ liệu bóc tách</button>
+            </h3>
+            <div id="mrp-status" style="font-size:12.5px; color:#64748b;"></div>
+            <div id="mrp-stats" class="mrp-stats"></div>
+
+            <div class="mrp-subtabs">
+                <button type="button" class="btn-refresh active" id="btn-mrp-subtab-status">📋 Trạng thái đơn hàng</button>
+                <button type="button" class="btn-refresh" id="btn-mrp-subtab-pick">✅ Chọn đơn chờ xuất</button>
+            </div>
+
+            <!-- TAB NHÁNH 1: TRẠNG THÁI ĐƠN HÀNG -->
+            <div id="mrp-sub-status">
+                <p class="mrp-hint">Đơn mới từ bóc tách là <b>Chưa xử lý</b> và chưa tác động gì. Đơn được đưa vào <b>Chờ xuất</b> ở tab "Chọn đơn chờ xuất".
+                    Khi kho xuất thực tế, bộ phận Kế hoạch xác nhận <b>Đã xuất</b> (được chuyển thẳng từ Chưa xử lý). Mọi thay đổi đều được ghi nhật ký.</p>
+                <div class="search-bar-row">
+                    <input type="text" id="mrpStatusSearch" class="form-control search-bar" placeholder="Tìm mã đơn (VD 26-169), sản phẩm, dự án...">
+                    <select id="mrpStatusFilter" class="form-control mrp-select">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="Chưa xử lý">Chưa xử lý</option>
+                        <option value="Chờ xuất">Chờ xuất</option>
+                        <option value="Đã xuất">Đã xuất</option>
+                    </select>
+                </div>
+                <div id="mrp-issue-bar" class="mrp-action-bar" style="display:none;">
+                    <label class="mrp-toggle"><input type="checkbox" id="mrpSelectAllIssue"> Chọn tất cả đơn đang hiển thị</label>
+                    <button type="button" class="btn-export" id="btn-mrp-bulk-issue" disabled>✔ Xác nhận Đã xuất</button>
+                </div>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th id="mrpStatusHeadSelect" style="width:36px;"></th>
+                                <th class="text-left">Mã ĐH</th>
+                                <th class="text-left">Sản Phẩm</th>
+                                <th class="text-left">Dự Án</th>
+                                <th>Ngày BT</th>
+                                <th>Trạng Thái</th>
+                                <th>Cập Nhật</th>
+                                <th id="mrpStatusHeadAction">Thao Tác</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mrpStatusBody"><!-- Dữ liệu JS --></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- TAB NHÁNH 2: CHỌN ĐƠN CHỜ XUẤT -->
+            <div id="mrp-sub-pick" style="display:none;">
+                <p class="mrp-hint">Tích các đơn cần chuẩn bị vật tư rồi bấm <b>Lưu</b>. Danh mục chờ được <b>cộng dồn</b> qua các ngày - đơn đã tích hôm trước vẫn được giữ phần vật tư.
+                    Toàn bộ vật tư bóc tách của đơn Chờ xuất là phần mà công tắc "Tồn đã trừ chờ xuất" trừ khỏi tồn kho, dù kho chưa xuất thật.</p>
+                <div id="mrp-pick-readonly" class="mrp-note" style="display:none;">👁 Anh/chị đang ở chế độ xem. Chỉ người được giao quyền "Chọn đơn vào chờ xuất" mới tích chọn được.</div>
+                <div class="search-bar-row">
+                    <input type="text" id="mrpPickSearch" class="form-control search-bar" placeholder="Tìm mã đơn, sản phẩm, dự án...">
+                </div>
+                <div class="table-responsive mrp-pick-list">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:70px;">Chờ xuất</th>
+                                <th class="text-left">Mã ĐH</th>
+                                <th class="text-left">Sản Phẩm</th>
+                                <th class="text-left">Dự Án</th>
+                                <th>Trạng Thái</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mrpPickBody"><!-- Dữ liệu JS --></tbody>
+                    </table>
+                </div>
+                <div id="mrp-pick-actions" class="mrp-action-bar" style="display:none;">
+                    <button type="button" class="btn-export" id="btn-mrp-save-waiting" disabled>💾 Lưu danh mục chờ</button>
+                    <button type="button" class="btn-refresh" id="btn-mrp-cancel-waiting" style="display:none;">✕ Hủy thay đổi</button>
+                </div>
+
+                <h4 class="mrp-subtitle">📊 Tổng hợp vật tư chờ xuất</h4>
+                <div id="mrp-summary-caption" style="font-size:13px; color:var(--vh-dark); margin-bottom:10px;"></div>
+                <div class="search-bar-row">
+                    <input type="text" id="mrpSearchInput" class="form-control search-bar" placeholder="Tìm mã, tên vật tư hoặc mã đơn...">
+                    <label class="mrp-toggle"><input type="checkbox" id="mrpOnlyShort"> Chỉ hiện mã không đủ tồn</label>
+                    <button type="button" class="btn-export" id="btn-export-mrp">📥 Xuất Excel</button>
+                </div>
+                <!-- Khung cuộn RIÊNG để ghim được hàng tiêu đề: tiêu đề trong khung kéo ngang chỉ ghim được theo chính khung đó -->
+                <div class="table-responsive mrp-summary-scroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="text-left">Mã Vật Tư</th>
+                                <th class="text-left">Tên Vật Tư</th>
+                                <th>ĐVT</th>
+                                <th class="text-right">Tồn Kế Toán</th>
+                                <th class="text-right">Chờ Xuất</th>
+                                <th class="text-right">Còn Lại</th>
+                                <th>Số Đơn</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mrpTableBody"><!-- Dữ liệu JS --></tbody>
+                    </table>
+                </div>
+                <p style="font-size:12px; color:#94a3b8; margin:6px 0 0 0;">Bấm vào một dòng để xem mã đó thuộc những đơn nào. "Còn Lại" âm (màu cam) = tồn kho không đủ cho các đơn chờ.</p>
+
+                <h4 class="mrp-subtitle">🆕 Vật tư chưa có mã kho</h4>
+                <p class="mrp-hint">Kho chưa từng có nên toàn bộ là phần cần mua. Vật tư đã có trong kho mà vẫn nằm ở đây là do tên trong bóc tách chưa được gán mã ở sheet VT BT.</p>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="text-left">Tên Vật Tư</th>
+                                <th>ĐVT</th>
+                                <th class="text-right">Cần Mua</th>
+                                <th class="text-left">Các Đơn</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mrpNoCodeBody"><!-- Dữ liệu JS --></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <details class="mrp-details">
+                <summary>⚠️ Cảnh báo từ bóc tách (<span id="mrp-warn-count">0</span>)</summary>
+                <div id="mrp-warnings"></div>
+            </details>
+        </div>
+
+        <!-- PANEL VẬT TƯ ĐI ĐƯỜNG - chờ kết nối dữ liệu theo dõi hàng về của bộ phận Mua hàng -->
+        <div class="panel" id="transit-panel" style="display:none;">
+            <h3 class="panel-title"><span>🚚 Vật Tư Đi Đường</span></h3>
+            <div class="mrp-note">🚧 Chưa kết nối dữ liệu. Tab này sẽ hiển thị danh sách hàng đã mua đang về theo đúng file mà bộ phận Mua hàng đang theo dõi,
+                và phần số lượng sắp về sẽ được cộng vào công tắc tồn kho.</div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="text-left">Mã Vật Tư</th>
+                            <th class="text-left">Tên Vật Tư</th>
+                            <th>ĐVT</th>
+                            <th class="text-right">SL Đang Về</th>
+                            <th class="text-left">Nhà Cung Cấp</th>
+                            <th>Ngày Dự Kiến Về</th>
+                        </tr>
+                    </thead>
+                    <tbody><tr><td colspan="6" style="color:#94a3b8; padding:20px;">Chưa có dữ liệu.</td></tr></tbody>
+                </table>
+            </div>
+        </div>
     </div>
 
 
@@ -937,7 +1137,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260924-dashboard-pie1"></script>
+    <script src="assets/js/app.js?v=20260925-waiting9"></script>
 
 </body>
 </html>
