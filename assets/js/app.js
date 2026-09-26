@@ -3209,6 +3209,109 @@ function switchMrpSubTab(tab) {
 // TÍNH TOÁN
 // ---------------------------------------------------------------------------
 // Trạng thái "đang có hiệu lực" để xem trước: trạng thái đã lưu + thay đổi tích chờ chưa lưu.
+// ---------------------------------------------------------------------------
+// GỢI Ý TẤM LẺ (chỉ tham khảo - KHÔNG cộng vào số liệu cân đối)
+// Kế toán ghi mỗi tấm lẻ một mã riêng, kích thước nằm ngay trong tên: "Thép tấm Q355 20x2000x3400",
+// "Thép tấm Q355 tròn D700x115". App đọc tên để tìm tấm lẻ CÙNG CHIỀU DÀY (mác nào cũng được - các mác
+// thay thế được cho nhau ở tấm lẻ) và gợi ý cho người mua cân nhắc mua bớt tấm nguyên.
+// ---------------------------------------------------------------------------
+// Khổ tấm nguyên. Quy tắc theo TỪNG CHIỀU DÀY: khổ LỚN NHẤT đang có là tiêu chuẩn, khổ nhỏ hơn là tấm lẻ.
+// Ngoại lệ: 1500x3000 và 3000x12000 LUÔN là tấm nguyên ở mọi chiều dày, không làm khổ khác thành tấm lẻ;
+//           có 2000x12000 thì 2000x6000 cùng chiều dày vẫn là tiêu chuẩn.
+const PLATE_SIZE_RANK = ['1500x6000', '2000x6000', '2000x12000'];   // nhỏ -> lớn
+const PLATE_SPECIAL_SIZES = ['1500x3000', '3000x12000'];
+const STEEL_KG_PER_MM3 = 7.85e-6;
+
+function parsePlateName(name) {
+    const t = String(name || '').normalize('NFC').replace(/×/g, 'x');
+    const m = t.match(/th[ée]p\s+t[ấa]m\s+([A-Za-z0-9]+)\s+(tr[òo]n\s+)?D?\s*(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)(?:\s*x\s*(\d+(?:[.,]\d+)?))?/i);
+    if (!m) return null;
+    const n = v => v == null ? null : Number(String(v).replace(',', '.'));
+    const grade = m[1].toUpperCase();
+    if (m[2]) {   // tròn: "D700 x 115" = đường kính x chiều dày
+        const d = n(m[3]), th = n(m[4]);
+        return { grade, thick: th, round: true, dia: d, kg: Math.PI * (d / 2) ** 2 * th * STEEL_KG_PER_MM3, sizeText: `tròn D${d}` };
+    }
+    if (m[5] == null) return null;
+    const th = n(m[3]), w = n(m[4]), l = n(m[5]);
+    // Khóa khổ: cạnh ngắn x cạnh dài (tên có thể ghi 6000x2000 hay 2000x6000)
+    const sizeKey = `${Math.min(w, l)}x${Math.max(w, l)}`;
+    return { grade, thick: th, round: false, w, l, sizeKey, kg: th * w * l * STEEL_KG_PER_MM3, sizeText: `${w}×${l}` };
+}
+
+// Tập khổ tiêu chuẩn theo từng chiều dày, suy ra từ các tên thép tấm (danh sách tồn kho + bóc tách).
+function buildPlateStandards(names) {
+    const present = {};   // dày -> khổ trong PLATE_SIZE_RANK đang xuất hiện
+    names.forEach(nm => {
+        const pl = parsePlateName(nm);
+        if (!pl || pl.round || !(pl.thick > 0) || !PLATE_SIZE_RANK.includes(pl.sizeKey)) return;
+        (present[pl.thick] = present[pl.thick] || new Set()).add(pl.sizeKey);
+    });
+    const std = {};
+    Object.keys(present).forEach(t => {
+        const largest = PLATE_SIZE_RANK.filter(k => present[t].has(k)).pop();
+        const set = new Set([largest, ...PLATE_SPECIAL_SIZES]);
+        if (largest === '2000x12000') set.add('2000x6000');
+        std[t] = set;
+    });
+    return std;
+}
+
+function isStandardPlate(pl, standards) {
+    if (!pl || pl.round) return false;
+    if (PLATE_SPECIAL_SIZES.includes(pl.sizeKey)) return true;
+    const set = standards[pl.thick];
+    return !!(set && set.has(pl.sizeKey));
+}
+
+// Chỉ mục tấm lẻ đang có trong kho theo chiều dày (dựng lại mỗi lần tính - vài trăm dòng, rất nhẹ).
+function buildRemnantIndex(standards) {
+    const idx = {};
+    flatInventoryList.forEach(item => {
+        if (isPriceSheetName(item.sheet)) return;
+        const qty = accountingStockOf(item);
+        if (!(qty > 0)) return;
+        const pl = parsePlateName(item.name);
+        if (!pl || !(pl.thick > 0) || isStandardPlate(pl, standards)) return;
+        (idx[pl.thick] = idx[pl.thick] || []).push({ code: String(item.id).trim(), name: item.name, qty, ...pl });
+    });
+    return idx;
+}
+
+// Tấm lẻ gợi ý cho 1 dòng thép tấm nguyên: cùng chiều dày, cùng mác xếp trước, rồi tấm to trước.
+// Kèm phần ĐÃ GIỮ để tận dụng: "mine" = giữ cho chính mã này; tấm người khác giữ cho mã khác thì trừ khỏi phần còn trống.
+function remnantHintFor(rowName, rowCode, remIdx, standards) {
+    const pl = parsePlateName(rowName);
+    if (!isStandardPlate(pl, standards)) return null;
+    const target = normalizeMrpCode(rowCode);
+    const resBy = {};
+    ((mrpData && mrpData.reservations) || []).forEach(x => { (resBy[normalizeMrpCode(x.remnant)] = resBy[normalizeMrpCode(x.remnant)] || []).push(x); });
+    const list = (remIdx[pl.thick] || []).filter(r => normalizeMrpCode(r.code) !== target).map(r => {
+        const rs = resBy[normalizeMrpCode(r.code)] || [];
+        const mineRec = rs.find(x => normalizeMrpCode(x.target) === target);
+        const others = rs.filter(x => x !== mineRec);
+        const othersQty = others.reduce((s, x) => s + (Number(x.qty) || 0), 0);
+        const available = Math.max(0, r.qty - othersQty);          // phần còn giữ được cho mã này
+        const mineRaw = mineRec ? Number(mineRec.qty) || 0 : 0;
+        const mine = Math.min(mineRaw, available);                  // kho giảm bớt -> tự hạ phần giữ xuống bằng tồn thực
+        return Object.assign({}, r, { others, othersQty, available, mine, mineRaw, mineRec, over: mineRaw > available });
+    }).filter(r => r.available > 0 || r.mineRaw > 0)
+      .sort((a, b) => ((b.grade === pl.grade) - (a.grade === pl.grade)) || (b.kg - a.kg));
+    if (!list.length) return null;
+    const totalKg = list.reduce((s, r) => s + r.kg * r.available, 0);
+    const mineKg = list.reduce((s, r) => s + r.kg * r.mine, 0);
+    return { list, totalKg, pieces: list.reduce((s, r) => s + r.available, 0), equivSheets: totalKg / pl.kg,
+             mineCount: list.reduce((s, r) => s + r.mine, 0), mineEq: mineKg / pl.kg,
+             fullSize: pl.sizeText, grade: pl.grade, thick: pl.thick, target: String(rowCode || '').trim() };
+}
+
+// Số tấm nguyên đề xuất mua trước / sau khi trừ phần tấm lẻ ĐÃ TÍCH tận dụng (người dùng chủ động chọn).
+function purchasePlan(r) {
+    const base = roundUpPurchase(r.shortage, r.unit);
+    if (!r.remnant || !(r.remnant.mineEq > 0)) return { base, after: base };
+    return { base, after: roundUpPurchase(Math.max(0, r.shortage - r.remnant.mineEq), r.unit) };
+}
+
 // Gộp nhu cầu của các ĐƠN VỊ đang giữ vật tư (Chờ xuất + phần chưa xuất của Xuất một phần) theo mã.
 // includePending = true: tính cả thay đổi tích chờ chưa lưu (để xem trước ở tab Chọn đơn).
 function computeWaitingNeeds(includePending) {
@@ -3262,6 +3365,11 @@ function computeWaitingNeeds(includePending) {
 
     const sortOrders = list => list.sort((a, b) => String(b.orderKey).localeCompare(String(a.orderKey), 'vi', { numeric: true }));
     const transitIdx = groupTransitByCode();
+    // Khổ tiêu chuẩn suy từ MỌI tên thép tấm đang biết (cả mã tồn 0 và vật tư trong bóc tách).
+    const plateStandards = buildPlateStandards(
+        flatInventoryList.filter(i => !isPriceSheetName(i.sheet)).map(i => i.name)
+            .concat(Object.values(coded).map(g => g.demandName)));
+    const remIdx = buildRemnantIndex(plateStandards);
     const rows = Object.values(coded).map(g => {
         const item = stockById[g.key];
         const stock = accountingStockOf(item);
@@ -3296,6 +3404,8 @@ function computeWaitingNeeds(includePending) {
             code: item ? String(item.id).trim() : g.code, key: g.key, name: item ? item.name : g.demandName, unit: item ? item.unit : g.demandUnit,
             demandUnit: g.demandUnit, need: g.need, stock, remain, shortage, inStockList: !!item,
             transit, transitRows, transitSkipped,
+            // Chỉ để GỢI Ý - không đưa vào stock/remain/shortage.
+            remnant: remnantHintFor(item ? item.name : g.demandName, item ? item.id : g.code, remIdx, plateStandards),
             // ĐVT bóc tách khác ĐVT kho (VD Bộ vs Kg) thì phép trừ vô nghĩa - đánh dấu để người xem kiểm tra.
             unitMismatch, unitDetail,
             orders: sortOrders(g.orders)
@@ -3854,6 +3964,9 @@ function renderMrpWaitingSummary(pendingCount) {
                     ? `<span class="badge badge-warning" title="Mã bóc tách không có trong kho, nhưng kho có vật tư cùng tên với mã khác - kiểm tra lại mã trong sheet VT BT. Đang tính tồn = 0.">⚠ Kho có tên này với mã ${escapeHtml(r.nameHintCode)}</span>`
                     : '<span class="badge badge-info" title="Kho hiện không có mã này (báo cáo tồn kho kế toán không có dòng của mã) - tính tồn = 0, toàn bộ số chờ xuất là phần cần mua">Tồn 0 · kho chưa có</span>') : '',
                 r.unitMismatch ? `<span class="badge badge-warning" title="ĐVT kho: ${escapeHtml(r.inStockList ? r.unit : '(không có)')} | ĐVT bóc tách theo đơn - ${escapeHtml(r.unitDetail)}. Sửa trong sheet VT BT rồi Tổng hợp lại các đơn này.">⚠ ĐVT khác</span>` : '',
+                r.remnant ? (r.remnant.mineCount > 0
+                    ? (() => { const pp = purchasePlan(r); return `<span class="badge badge-reuse-on" title="Đã chọn tận dụng ${formatMrpQty(r.remnant.mineCount)} tấm lẻ ≈ ${formatMrpQty(r.remnant.mineEq)} tấm ${r.remnant.fullSize}. Bấm dòng để xem / bỏ chọn.">♻ Tận dụng ${formatMrpQty(r.remnant.mineCount)} tấm lẻ ≈ ${formatMrpQty(r.remnant.mineEq)} tấm${r.shortage > 0 ? ` → mua ${formatMrpQty(pp.after)} thay vì ${formatMrpQty(pp.base)}` : ''}</span>`; })()
+                    : `<span class="badge badge-reuse" title="Kho có ${formatMrpQty(r.remnant.pieces)} tấm lẻ dày ${r.remnant.thick}mm (mọi mác) ≈ ${formatMrpQty(r.remnant.equivSheets)} tấm ${r.remnant.fullSize}. Bấm dòng để xem và tích tấm muốn tận dụng.">♻ ${formatMrpQty(r.remnant.pieces)} tấm lẻ ≈ ${formatMrpQty(r.remnant.equivSheets)} tấm</span>`) : '',
                 r.transitSkipped.length ? `<span class="badge badge-warning" title="Có ${r.transitSkipped.length} dòng đang về ghi ĐVT ${escapeHtml(r.transitSkipped.map(t => t.unit).join(', '))} - khác ĐVT ${escapeHtml(r.unit)}, KHÔNG được cộng. Kiểm tra lại đơn mua.">⚠ Đi đường khác ĐVT</span>` : ''
             ].join(' ');
             const main = `
@@ -3868,7 +3981,7 @@ function renderMrpWaitingSummary(pendingCount) {
                     <td>${r.orders.length}</td>
                 </tr>`;
             // Mã khớp kho -> hiện ĐVT kế toán cho mọi đơn (kế toán là chuẩn); chưa khớp mới hiện ĐVT từng đơn.
-            const detail = open ? `<tr class="mrp-detail-row"><td colspan="8">${renderMrpOrderDetail(r.orders, r.inStockList ? r.unit : r.demandUnit, r.inStockList)}${renderMrpTransitDetail(r)}</td></tr>` : '';
+            const detail = open ? `<tr class="mrp-detail-row"><td colspan="8">${renderMrpOrderDetail(r.orders, r.inStockList ? r.unit : r.demandUnit, r.inStockList)}${renderMrpTransitDetail(r)}${renderMrpRemnantDetail(r)}</td></tr>` : '';
             return main + detail;
         }).join('');
     }
@@ -3918,6 +4031,71 @@ function renderMrpTransitDetail(r) {
         <table class="mrp-detail-table"><thead><tr>
         <th class="text-left">Nguồn</th><th class="text-left">NCC</th><th class="text-left">Phục vụ</th><th>Dự kiến về</th><th class="text-right">Còn về</th>
         </tr></thead><tbody>${lines}</tbody></table>`;
+}
+
+// Danh sách tấm lẻ cùng chiều dày khi mở 1 mã thép tấm: tích (hoặc nhập số tấm) để TẬN DỤNG thay tấm nguyên.
+// Chỉ những tấm người dùng chủ động tích mới được trừ vào "Mua sau tận dụng"; không tích thì không ảnh hưởng gì.
+function renderMrpRemnantDetail(r) {
+    const h = r.remnant;
+    if (!h) return '';
+    const can = hasPermission('RESERVE_REMNANT');
+    const dis = mrpSaving ? ' disabled' : '';
+    const shown = h.list.slice(0, 12);
+    const lines = shown.map(x => {
+        const attrs = `data-remnant="${escapeHtml(x.code)}" data-target="${escapeHtml(h.target)}"`;
+        let control;
+        if (!can) control = x.mine > 0 ? `<b>${formatMrpQty(x.mine)}</b> tấm` : '<span style="color:#94a3b8;">—</span>';
+        else if (x.qty === 1 && x.othersQty === 0) control = `<input type="checkbox" class="remnant-check" ${attrs} aria-label="Tận dụng tấm lẻ ${escapeHtml(x.code)}"${x.mine > 0 ? ' checked' : ''}${dis}>`;
+        else control = `<span class="mrp-issued-edit"><input type="number" class="mrp-issued-input remnant-input" min="0" max="${x.available}" step="1" value="${x.mine}" ${attrs} aria-label="Số tấm lẻ ${escapeHtml(x.code)} muốn tận dụng"${dis}> / ${formatMrpQty(x.available)}
+            <button type="button" class="btn-refresh mrp-action-btn" data-action="save-remnant" ${attrs}${dis}>Lưu</button></span>`;
+        const held = x.others.map(o => `${formatMrpQty(o.qty)} tấm cho ${escapeHtml(o.target)} · ${escapeHtml(o.by)}`).join('<br>');
+        return `<tr class="${x.mine > 0 ? 'remnant-on' : ''}">
+            <td>${control}</td>
+            <td class="text-left">${escapeHtml(x.code)}</td>
+            <td class="text-left">${escapeHtml(x.grade)}${x.grade === h.grade ? '' : ' <span style="color:#94a3b8;">(khác mác)</span>'}</td>
+            <td>${escapeHtml(x.sizeText)} × ${formatMrpQty(x.thick)}</td>
+            <td class="text-right">${formatMrpQty(x.qty)}</td>
+            <td class="text-right">${formatMrpQty(Math.round(x.kg * x.qty))} kg</td>
+            <td class="text-left" style="font-size:11.5px; color:#64748b;">${held || ''}${x.over ? `<div style="color:var(--danger); font-weight:700;">Đang giữ ${formatMrpQty(x.mineRaw)} nhưng chỉ còn ${formatMrpQty(x.available)} tấm</div>` : ''}</td>
+        </tr>`;
+    }).join('');
+    const pp = purchasePlan(r);
+    const summary = h.mineCount > 0
+        ? `<div class="remnant-summary">♻ Đã chọn tận dụng <b>${formatMrpQty(h.mineCount)} tấm lẻ ≈ ${formatMrpQty(h.mineEq)} tấm ${escapeHtml(h.fullSize)}</b>${r.shortage > 0
+            ? ` → <b>Mua sau tận dụng: ${formatMrpQty(pp.after)} ${escapeHtml(r.unit)}</b> (thay vì ${formatMrpQty(pp.base)})` : ' – mã này hiện không thiếu'}</div>`
+        : '';
+    return `<div style="margin-top:10px; font-size:12.5px; font-weight:700; color:var(--vh-green-dark);">♻ Tấm lẻ cùng chiều dày ${formatMrpQty(h.thick)} mm trong kho${can ? ' – tích tấm muốn tận dụng' : ''}</div>
+        <table class="mrp-detail-table"><thead><tr>
+        <th style="width:190px; white-space:nowrap;">Tận dụng</th><th class="text-left">Mã</th><th class="text-left">Mác</th><th>Kích thước</th><th class="text-right">Tồn</th><th class="text-right">KL ước tính</th><th class="text-left">Đang giữ cho mã khác</th>
+        </tr></thead><tbody>${lines}</tbody></table>
+        ${summary}
+        <div style="font-size:12px; color:#64748b; margin-top:4px;">${h.list.length > shown.length ? `… và ${h.list.length - shown.length} tấm lẻ khác. ` : ''}Còn trống ≈ ${formatMrpQty(Math.round(h.totalKg))} kg ≈ ${formatMrpQty(h.equivSheets)} tấm ${escapeHtml(h.fullSize)}. Tận dụng được bao nhiêu tùy kích thước chi tiết; không tích thì số đề xuất mua giữ nguyên.</div>`;
+}
+
+// Lưu phần giữ tấm lẻ (qty = 0 là bỏ giữ). Gửi kèm SL đang thấy để máy chủ phát hiện người khác vừa đổi.
+async function saveRemnant(remnant, target, qty) {
+    if (!hasPermission('RESERVE_REMNANT') || !mrpData || mrpSaving) return;
+    const n = Math.round(Number(String(qty).replace(',', '.')));
+    if (!Number.isFinite(n) || n < 0) { showAlert('Số tấm tận dụng phải là số nguyên từ 0 trở lên.', 'error'); renderMrpPanel(); return; }
+    const cur = (mrpData.reservations || []).find(x => normalizeMrpCode(x.remnant) === normalizeMrpCode(remnant) && normalizeMrpCode(x.target) === normalizeMrpCode(target));
+    const fromQty = cur ? Number(cur.qty) || 0 : 0;
+    if (n === fromQty) return;
+    mrpSaving = true;
+    renderMrpPanel();
+    setMrpStatus('💾 Đang lưu tấm lẻ tận dụng...', false, null);
+    try {
+        const data = await apiPost('reserveRemnant', { token: currentUser.token, changes: [{ remnant, target, qty: n, fromQty }] });
+        if (isUnauthorizedResponse(data)) return;
+        if (!data || !data.success) { showAlert((data && data.error) || 'Chưa lưu được tấm lẻ tận dụng.', 'error'); return; }
+        mrpData.reservations = data.reservations || [];
+        setMrpStatus(n > 0 ? `♻ Đã giữ ${n} tấm ${remnant} để tận dụng cho ${target}.` : `♻ Đã bỏ tận dụng tấm ${remnant}.`, false, null);
+    } catch (err) {
+        console.error('Lỗi lưu tấm lẻ tận dụng:', err);
+        showAlert('Không kết nối được máy chủ, chưa lưu được.', 'error');
+    } finally {
+        mrpSaving = false;
+        renderMrpPanel();
+    }
 }
 
 function renderMrpWarnings() {
@@ -4029,8 +4207,22 @@ function bindMrpEvents(on) {
     const mrpBody = document.getElementById('mrpTableBody');
     if (mrpBody) {
         mrpBody.addEventListener('click', (e) => {
+            const saveBtn = e.target.closest('[data-action="save-remnant"]');
+            if (saveBtn) {
+                const input = saveBtn.parentElement.querySelector('.remnant-input');
+                if (input) saveRemnant(saveBtn.dataset.remnant, saveBtn.dataset.target, input.value);
+                return;
+            }
             const row = e.target.closest('tr[data-mrp-code]');
             if (row) toggleMrpRow(row.dataset.mrpCode);
+        });
+        mrpBody.addEventListener('change', (e) => {
+            const box = e.target.closest('.remnant-check');
+            if (box) saveRemnant(box.dataset.remnant, box.dataset.target, box.checked ? 1 : 0);
+        });
+        mrpBody.addEventListener('keydown', (e) => {
+            const input = e.target.closest('.remnant-input');
+            if (input && e.key === 'Enter') { e.preventDefault(); saveRemnant(input.dataset.remnant, input.dataset.target, input.value); }
         });
     }
 }
@@ -4065,33 +4257,36 @@ function exportMrp() {
         !r.inStockList ? (r.nameHintCode ? `Lệch mã - kho có tên này với mã ${r.nameHintCode}` : 'Kho chưa có mã này') : '',
         r.unitMismatch ? `ĐVT lệch - kho: ${r.inStockList ? r.unit : '(không có)'}; bóc tách: ${r.unitDetail}` : '',
         r.transitSkipped.length ? `Có ${r.transitSkipped.length} dòng đi đường khác ĐVT, không cộng` : '',
-        r.transitRows.some(t => t.etaTs && t.etaTs < today.getTime()) ? 'Có hàng đi đường quá ngày dự kiến' : ''
+        r.transitRows.some(t => t.etaTs && t.etaTs < today.getTime()) ? 'Có hàng đi đường quá ngày dự kiến' : '',
+        r.remnant ? (r.remnant.mineCount > 0
+            ? `Tận dụng tấm lẻ: ${r.remnant.list.filter(x => x.mine > 0).map(x => x.code + ' ×' + x.mine).join(', ')} ≈ ${round(r.remnant.mineEq)} tấm ${r.remnant.fullSize}`
+            : `Tham khảo: kho có ${round(r.remnant.pieces)} tấm lẻ cùng dày ≈ ${round(r.remnant.equivSheets)} tấm ${r.remnant.fullSize} - cân nhắc mua bớt`) : ''
     ].filter(Boolean).join('; ');
 
     // ---------- Sheet 1: ĐỀ XUẤT MUA (chỉ mã còn thiếu SAU KHI đã cộng hàng đi đường) ----------
     const shortRows = lastMrpView.rows.filter(r => r.shortage > 0);
-    const HEAD = ['STT', 'Mã vật tư', 'Tên vật tư', 'ĐVT', 'Tồn kế toán', 'Chờ xuất', 'Đi đường', 'Thiếu', 'Đề xuất mua', 'Phục vụ đơn', 'Ghi chú'];
+    const HEAD = ['STT', 'Mã vật tư', 'Tên vật tư', 'ĐVT', 'Tồn kế toán', 'Chờ xuất', 'Đi đường', 'Thiếu', 'Đề xuất mua', 'Mua sau tận dụng', 'Phục vụ đơn', 'Ghi chú'];
     const aoa = [
         ['ĐỀ XUẤT MUA VẬT TƯ - THEO ĐƠN HÀNG CHỜ XUẤT'],
         [`Ngày lập: ${nowText}     Người lập: ${(currentUser && (currentUser.name || currentUser.email)) || ''}`],
         [`Căn cứ: ${lastMrpView.orderKeys.length} sản phẩm/đơn đang giữ vật tư (${lastMrpView.orderKeys.join(', ')})` +
             (lastMrpView.pendingCount ? ` - GỒM ${lastMrpView.pendingCount} thay đổi CHƯA LƯU` : '') +
             (lastMrpView.filtered ? ' - theo bộ lọc đang xem trên app' : '')],
-        ['Thiếu = Chờ xuất − Tồn kế toán − Đi đường. Đề xuất mua: làm tròn lên số nguyên với đơn vị đếm (tấm, cây, cái, bộ...).'],
+        ['Thiếu = Chờ xuất − Tồn kế toán − Đi đường. Đề xuất mua: làm tròn lên với đơn vị đếm (tấm, cây, cái, bộ...). Mua sau tận dụng: đã trừ phần tấm lẻ người mua chọn tận dụng.'],
         [],
         HEAD
     ];
     let stt = 0;
-    shortRows.forEach(r => aoa.push([++stt, r.code, r.name, r.unit, round(r.stock), round(r.need), round(r.transit),
-        round(r.shortage), roundUpPurchase(r.shortage, r.unit), r.orders.map(o => o.orderKey).join(', '), noteOf(r)]));
+    shortRows.forEach(r => { const pp = purchasePlan(r); aoa.push([++stt, r.code, r.name, r.unit, round(r.stock), round(r.need), round(r.transit),
+        round(r.shortage), pp.base, pp.after, r.orders.map(o => o.orderKey).join(', '), noteOf(r)]); });
     // Vật tư chưa có mã: kho chưa từng có, không có hàng đi đường khớp được -> cần mua toàn bộ.
     lastMrpView.noCodeRows.forEach(g => aoa.push([++stt, '(chưa có mã)', g.name, g.unit, 0, round(g.need), 0,
-        round(g.need), roundUpPurchase(g.need, g.unit), g.orders.map(o => o.orderKey).join(', '), 'Vật tư chưa có mã kho - kiểm tra VT BT']));
+        round(g.need), roundUpPurchase(g.need, g.unit), roundUpPurchase(g.need, g.unit), g.orders.map(o => o.orderKey).join(', '), 'Vật tư chưa có mã kho - kiểm tra VT BT']));
     if (!stt) aoa.push(['', '', '✅ Không có vật tư nào cần mua thêm - tồn kho và hàng đi đường đủ cho các đơn Chờ xuất.']);
     aoa.push([], [], ['', 'Người lập', '', '', 'Trưởng phòng KH - MH', '', '', '', 'Giám đốc']);
     const ws1 = XLSX.utils.aoa_to_sheet(aoa);
     ws1['!merges'] = [0, 1, 2, 3].map(r => ({ s: { r, c: 0 }, e: { r, c: HEAD.length - 1 } }));
-    ws1['!cols'] = [5, 14, 42, 7, 11, 11, 11, 11, 12, 22, 40].map(w => ({ wch: w }));
+    ws1['!cols'] = [5, 14, 40, 7, 11, 10, 10, 10, 11, 13, 22, 44].map(w => ({ wch: w }));
 
     // ---------- Sheet 2: cân đối đầy đủ như trên màn hình ----------
     const summary = lastMrpView.rows.map(r => ({
