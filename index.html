@@ -281,6 +281,7 @@
         .badge-reuse { background: #E9F6EF; color: var(--vh-green-dark); }
         .badge-reuse-on { background: var(--vh-green-dark); color: #FFFFFF; }
         .badge-alt { background: #E8F0FB; color: #16407A; }
+        .stat-bar-sub { font-size: 0.62em; font-weight: 600; color: var(--text-muted); }
         .mrp-stale-box { margin-top: 16px; padding: 12px 14px; border: 1px solid #F0C98C; background: #FFFBF2; border-radius: 12px; }
         .mrp-stale-head { font-size: 14px; font-weight: 700; color: #8A5A00; margin-bottom: 4px; }
         .remnant-on td { background: #EEF8F1 !important; }
@@ -773,6 +774,9 @@
                 <label class="waiting-toggle" id="btn-toggle-transit-stock" style="display:none;" title="Cộng hàng đã đặt đang về - chỉ đổi cách hiển thị, không thay đổi số liệu kế toán">
                     <input type="checkbox" id="chkTransitStock"> <span id="transit-toggle-text">Cộng đi đường</span>
                 </label>
+                <label class="waiting-toggle" id="wrap-show-zero" title="Mặc định ẩn mã tồn 0 cho gọn. Mã tồn 0 có đặt Min (đang báo Hết hàng) vẫn luôn hiện.">
+                    <input type="checkbox" id="chkShowZero"> <span>Hiện cả mã tồn 0</span>
+                </label>
                 <button type="button" class="btn-export" id="btn-export-inventory">📥 Xuất Excel</button>
             </div>
 
@@ -1189,7 +1193,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260926-stale2"></script>
+    <script src="assets/js/app.js?v=20260926-zero1"></script>
 
 </body>
 </html>
