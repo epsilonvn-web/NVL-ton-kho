@@ -280,6 +280,9 @@
         .badge-part { background: #FFF1D6; color: #8A5A00; }
         .badge-reuse { background: #E9F6EF; color: var(--vh-green-dark); }
         .badge-reuse-on { background: var(--vh-green-dark); color: #FFFFFF; }
+        .badge-alt { background: #E8F0FB; color: #16407A; }
+        .mrp-stale-box { margin-top: 16px; padding: 12px 14px; border: 1px solid #F0C98C; background: #FFFBF2; border-radius: 12px; }
+        .mrp-stale-head { font-size: 14px; font-weight: 700; color: #8A5A00; margin-bottom: 4px; }
         .remnant-on td { background: #EEF8F1 !important; }
         .remnant-summary { margin-top: 6px; padding: 7px 10px; border-radius: 8px; background: #E9F6EF; color: var(--vh-green-dark); font-size: 12.5px; }
         .mrp-order-toggle { background: none; border: none; padding: 4px 2px; min-height: 28px; font: inherit; font-weight: 700; color: var(--vh-navy); cursor: pointer; white-space: nowrap; }
@@ -1088,6 +1091,8 @@
                 </div>
             </div>
 
+            <!-- Nhắc bỏ giữ tấm "mồ côi" - để NGOÀI khối thu gọn cảnh báo để luôn nhìn thấy -->
+            <div id="mrp-stale-res" class="mrp-stale-box" style="display:none;"></div>
             <details class="mrp-details">
                 <summary>⚠️ Cảnh báo từ bóc tách (<span id="mrp-warn-count">0</span>)</summary>
                 <div id="mrp-warnings"></div>
@@ -1184,7 +1189,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260926-reuse2"></script>
+    <script src="assets/js/app.js?v=20260926-stale2"></script>
 
 </body>
 </html>
