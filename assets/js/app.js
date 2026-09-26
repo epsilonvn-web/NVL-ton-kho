@@ -2973,7 +2973,8 @@ function saveThresholdConfig() {
 // Trạng thái có đúng 1 nguồn: sheet TRANG_THAI_DON_HANG trong Database bóc tách, chỉ app ghi, có nhật ký.
 // App KHÔNG BAO GIỜ ghi vào số liệu kế toán - công tắc tồn kho chỉ đổi cách HIỂN THỊ.
 // ============================================================================
-const MRP_ST = Object.freeze({ NEW: 'Chưa xử lý', WAIT: 'Chờ xuất', DONE: 'Đã xuất' });
+// PART: sản phẩm đã xuất một phần số bộ (đơn lớn làm 2-3 đợt) - phần bộ chưa xuất vẫn được giữ vật tư.
+const MRP_ST = Object.freeze({ NEW: 'Chưa xử lý', WAIT: 'Chờ xuất', PART: 'Xuất một phần', DONE: 'Đã xuất' });
 // Sai số dấu phẩy động (VD 1.323 - 1.323 ra 2e-16) - nhỏ hơn mức này coi như bằng 0, không báo thiếu ảo.
 const MRP_EPSILON = 1e-6;
 
@@ -3031,7 +3032,7 @@ function formatMrpQty(value) {
 }
 
 function mrpStatusBadge(status) {
-    const cls = status === MRP_ST.DONE ? 'badge-success' : status === MRP_ST.WAIT ? 'badge-warning' : 'badge-info';
+    const cls = status === MRP_ST.DONE ? 'badge-success' : status === MRP_ST.WAIT ? 'badge-warning' : status === MRP_ST.PART ? 'badge-part' : 'badge-info';
     return `<span class="badge ${cls}">${escapeHtml(status)}</span>`;
 }
 
@@ -3208,20 +3209,13 @@ function switchMrpSubTab(tab) {
 // TÍNH TOÁN
 // ---------------------------------------------------------------------------
 // Trạng thái "đang có hiệu lực" để xem trước: trạng thái đã lưu + thay đổi tích chờ chưa lưu.
-function effectiveMrpStatus(order) {
-    if (mrpPendingWait.has(order.key)) return mrpPendingWait.get(order.key) ? MRP_ST.WAIT : MRP_ST.NEW;
-    return order.status || MRP_ST.NEW;
-}
-
-// Gộp nhu cầu của các đơn Chờ xuất theo mã, so với tồn kế toán.
-// includePending = true: tính cả thay đổi chưa lưu (để xem trước ở tab Chọn đơn).
+// Gộp nhu cầu của các ĐƠN VỊ đang giữ vật tư (Chờ xuất + phần chưa xuất của Xuất một phần) theo mã.
+// includePending = true: tính cả thay đổi tích chờ chưa lưu (để xem trước ở tab Chọn đơn).
 function computeWaitingNeeds(includePending) {
-    const orders = (mrpData && mrpData.orders) || [];
-    const waitingOrders = {};
-    orders.forEach(o => {
-        const st = includePending ? effectiveMrpStatus(o) : (o.status || MRP_ST.NEW);
-        if (st === MRP_ST.WAIT) waitingOrders[o.key] = o;
-    });
+    const { units } = mrpIndex();
+    const active = units.map(u => ({ u, f: unitReserveFactor(u, includePending) })).filter(x => x.f > MRP_EPSILON);
+    const activeByKey = {};
+    active.forEach(x => { activeByKey[x.u.key] = x; });
 
     const stockById = {};
     const stockByName = {};   // chỉ dùng để GỢI Ý khi lệch mã, không dùng để lấy số tồn
@@ -3235,23 +3229,35 @@ function computeWaitingNeeds(includePending) {
 
     const coded = {};
     const noCode = {};
-    ((mrpData && mrpData.demand) || []).forEach(line => {
-        const [orderKey, code, name, unit, qty] = line;
-        const order = waitingOrders[orderKey];
-        if (!order || !(qty > 0)) return;
-        const ref = { orderKey, qty, unit, product: order.product, project: order.project, date: order.date };
+    const addLine = (x, code, name, unit, qty) => {
+        // Xuất một phần: chỉ giữ phần của số bộ CHƯA xuất (VD còn 100/150 bộ -> giữ 2/3). Trải phôi tính cho cả
+        // sản phẩm nên chia tỷ lệ là gần đúng - chấp nhận được cho giữ chỗ; xuất đủ thì phần giữ về 0.
+        const q = (Number(qty) || 0) * x.f;
+        if (!(q > 0)) return;
+        const u = x.u, o = u.order;
+        const ref = { orderKey: u.key, qty: q, unit, product: u.isProduct ? u.name : o.product, project: o.project, date: o.date,
+                      partial: x.f < 1 - MRP_EPSILON, remainSets: u.isProduct ? Math.round(u.sets * x.f) : null, sets: u.sets };
         if (code) {
             const ck = normalizeMrpCode(code);
             const g = coded[ck] || (coded[ck] = { code, key: ck, demandName: name, demandUnit: unit, need: 0, orders: [] });
-            g.need += qty;
+            g.need += q;
             g.orders.push(ref);
         } else {
             // Vật tư chưa có mã: gom theo tên đã bỏ dấu/khoảng trắng thừa ("Ống inox" = "Ống Inox").
             const k = normalizeMrpText(name);
             const g = noCode[k] || (noCode[k] = { name, unit, need: 0, orders: [] });
-            g.need += qty;
+            g.need += q;
             g.orders.push(ref);
         }
+    };
+    // Đơn có sheet con: lấy nhu cầu theo SẢN PHẨM (chính xác hơn sheet tổng hợp); đơn cũ: theo đơn.
+    ((mrpData && mrpData.productDemand) || []).forEach(([pkey, , code, name, unit, qty]) => {
+        const x = activeByKey[pkey];
+        if (x && x.u.isProduct) addLine(x, code, name, unit, qty);
+    });
+    ((mrpData && mrpData.demand) || []).forEach(([okey, code, name, unit, qty]) => {
+        const x = activeByKey[okey];
+        if (x && !x.u.isProduct) addLine(x, code, name, unit, qty);
     });
 
     const sortOrders = list => list.sort((a, b) => String(b.orderKey).localeCompare(String(a.orderKey), 'vi', { numeric: true }));
@@ -3306,7 +3312,9 @@ function computeWaitingNeeds(includePending) {
     const noCodeRows = Object.values(noCode).map(g => Object.assign(g, { orders: sortOrders(g.orders) }))
         .sort((a, b) => String(a.name).localeCompare(String(b.name), 'vi'));
 
-    return { rows, noCodeRows, orderCount: Object.keys(waitingOrders).length, orderKeys: Object.keys(waitingOrders).sort() };
+    const orderCount = new Set(active.map(x => x.u.orderKey)).size;
+    return { rows, noCodeRows, orderCount, unitCount: active.length,
+             orderKeys: active.map(x => x.u.key).sort((a, b) => a.localeCompare(b, 'vi', { numeric: true })) };
 }
 
 // Hàng đi đường gom theo mã (đã chuẩn hóa như mọi chỗ so mã khác: 2 loại chữ Đ, ký tự vô hình...).
@@ -3435,9 +3443,9 @@ async function submitOrderStatusChanges(changes, successText) {
             return false;
         }
         const updated = data.statuses || {};
-        mrpData.orders.forEach(o => {
+        ((mrpData.products || []).concat(mrpData.orders)).forEach(o => {
             const u = updated[o.key];
-            if (u) { o.status = u.status; o.statusBy = u.by; o.statusAt = u.at; }
+            if (u) { o.status = u.status; o.issued = u.issued || 0; o.statusBy = u.by; o.statusAt = u.at; }
         });
         changes.forEach(c => { mrpPendingWait.delete(c.key); mrpSelectedForIssue.delete(c.key); });
         rebuildWaitingMap();
@@ -3465,20 +3473,105 @@ function setMrpButtonBusy(btn, busy, normalText) {
     else btn.innerText = normalText;
 }
 
+// ---------------------------------------------------------------------------
+// ĐƠN VỊ THEO DÕI: SẢN PHẨM (sheet con 26-169.1) nếu đơn có sheet con, còn lại chính ĐƠN (26-169).
+// Đơn lớn làm 2-3 đợt: mỗi sản phẩm ghi số bộ đã xuất; phần bộ CHƯA xuất vẫn được giữ vật tư theo tỷ lệ.
+// ---------------------------------------------------------------------------
+const mrpExpandedOrders = new Set();   // đơn đang mở danh sách sản phẩm (dùng chung 2 tab nhánh)
+
+function mrpIndex() {
+    const productsByOrder = {};
+    ((mrpData && mrpData.products) || []).forEach(p => (productsByOrder[p.orderKey] = productsByOrder[p.orderKey] || []).push(p));
+    Object.values(productsByOrder).forEach(list => list.sort((a, b) => String(a.key).localeCompare(String(b.key), 'vi', { numeric: true })));
+    const units = [];
+    const byKey = {};
+    ((mrpData && mrpData.orders) || []).forEach(o => {
+        const ps = productsByOrder[o.key];
+        const list = ps && ps.length
+            ? ps.map(p => ({ key: p.key, orderKey: o.key, isProduct: true, name: p.name, sets: p.sets, ref: p, order: o }))
+            : [{ key: o.key, orderKey: o.key, isProduct: false, name: o.product, sets: 0, ref: o, order: o }];
+        list.forEach(u => { units.push(u); byKey[u.key] = u; });
+        o._units = list;
+    });
+    return { units, byKey };
+}
+
+function unitStatus(u) { return u.ref.status || MRP_ST.NEW; }
+function unitIssued(u) { return unitStatus(u) === MRP_ST.DONE ? u.sets : (Number(u.ref.issued) || 0); }
+
+// Trạng thái xem trước ở tab Chọn đơn: đã lưu + thay đổi tích chờ chưa lưu.
+function effectiveUnitStatus(u) {
+    if (mrpPendingWait.has(u.key)) return mrpPendingWait.get(u.key) ? MRP_ST.WAIT : MRP_ST.NEW;
+    return unitStatus(u);
+}
+// Chỉ đơn vị Chưa xử lý / Chờ xuất mới tích chọn được; Xuất một phần / Đã xuất là việc của Kế hoạch.
+function isUnitPickable(u) { const s = unitStatus(u); return s === MRP_ST.NEW || s === MRP_ST.WAIT; }
+
+// Tỷ lệ vật tư còn phải giữ: Chờ xuất = toàn bộ; Xuất một phần = phần bộ chưa xuất; còn lại = 0.
+function unitReserveFactor(u, includePending) {
+    const st = includePending ? effectiveUnitStatus(u) : unitStatus(u);
+    if (st === MRP_ST.WAIT) return 1;
+    if (st === MRP_ST.PART && u.sets > 0) return Math.max(0, (u.sets - unitIssued(u)) / u.sets);
+    return 0;
+}
+
+// Trạng thái gộp của 1 đơn từ các sản phẩm.
+function orderAggregate(o) {
+    const units = o._units || [];
+    const sts = units.map(unitStatus);
+    const same = sts.every(s => s === sts[0]);
+    const done = sts.filter(s => s === MRP_ST.DONE).length;
+    if (same) return { status: sts[0], label: sts[0], done, total: units.length, mixed: false };
+    return { status: 'MIXED', label: `Một phần · ${done}/${units.length} SP đã xuất`, done, total: units.length, mixed: true };
+}
+
+function unitLatestUpdate(units) {
+    let best = null;
+    units.forEach(u => {
+        const at = u.ref.statusAt;
+        if (!at) return;
+        // "HH:mm dd/MM/yyyy" -> số để so sánh
+        const m = String(at).match(/(\d+):(\d+) (\d+)\/(\d+)\/(\d+)/);
+        const v = m ? Number(m[5] + m[4].padStart(2, '0') + m[3].padStart(2, '0') + m[1].padStart(2, '0') + m[2].padStart(2, '0')) : 0;
+        if (!best || v > best.v) best = { v, by: u.ref.statusBy, at };
+    });
+    return best;
+}
+
+function unitStatusBadge(u) {
+    const st = unitStatus(u);
+    if (st === MRP_ST.PART) return `<span class="badge badge-part">Xuất một phần · ${unitIssued(u)}/${u.sets} bộ</span>`;
+    return mrpStatusBadge(st);
+}
+function orderBadge(o) {
+    const a = orderAggregate(o);
+    if (a.mixed) return `<span class="badge badge-part">${escapeHtml(a.label)}</span>`;
+    if (a.status === MRP_ST.PART && (o._units || []).length === 1) return unitStatusBadge(o._units[0]);
+    return mrpStatusBadge(a.status);
+}
+
+// ---------------------------------------------------------------------------
+// GHI TRẠNG THÁI (mọi thao tác gom thành danh sách thay đổi theo ĐƠN VỊ, gửi 1 lần)
+// ---------------------------------------------------------------------------
+function changeFor(u, to, issued) {
+    return { key: u.key, from: unitStatus(u), fromIssued: unitIssued(u), to, issued: issued || 0 };
+}
+
 function saveWaitingList() {
     if (!hasPermission('EDIT_WAITING_LIST') || !mrpData || mrpSaving) return;
+    const { byKey } = mrpIndex();
     const changes = [];
-    mrpData.orders.forEach(o => {
-        if (!mrpPendingWait.has(o.key)) return;
-        const to = mrpPendingWait.get(o.key) ? MRP_ST.WAIT : MRP_ST.NEW;
-        if (to !== o.status) changes.push({ key: o.key, from: o.status, to });
+    mrpPendingWait.forEach((want, key) => {
+        const u = byKey[key];
+        if (!u || !isUnitPickable(u)) return;
+        const to = want ? MRP_ST.WAIT : MRP_ST.NEW;
+        if (to !== unitStatus(u)) changes.push(changeFor(u, to));
     });
     if (!changes.length) { mrpPendingWait.clear(); renderMrpPanel(); return; }
-    const addCount = changes.filter(c => c.to === MRP_ST.WAIT).length;
-    const removeCount = changes.length - addCount;
+    const add = changes.filter(c => c.to === MRP_ST.WAIT).length;
     const parts = [];
-    if (addCount) parts.push(`đưa ${addCount} đơn vào Chờ xuất`);
-    if (removeCount) parts.push(`bỏ ${removeCount} đơn khỏi Chờ xuất`);
+    if (add) parts.push(`đưa ${add} sản phẩm/đơn vào Chờ xuất`);
+    if (changes.length - add) parts.push(`bỏ ${changes.length - add} sản phẩm/đơn khỏi Chờ xuất`);
     showConfirm(`Anh/chị xác nhận ${parts.join(' và ')}?`, () => {
         submitOrderStatusChanges(changes, `✅ Đã lưu danh mục chờ xuất (${changes.length} thay đổi).`);
     });
@@ -3489,28 +3582,62 @@ function cancelWaitingChanges() {
     renderMrpPanel();
 }
 
-function confirmIssued(keys) {
+// Xác nhận xuất ĐỦ cho cả đơn (mọi sản phẩm chưa xuất đủ).
+function confirmIssued(orderKeys) {
     if (!hasPermission('CONFIRM_ISSUED') || !mrpData || mrpSaving) return;
-    const orders = mrpData.orders.filter(o => keys.includes(o.key) && o.status !== MRP_ST.DONE);
-    if (!orders.length) return;
+    mrpIndex();
+    const orders = mrpData.orders.filter(o => orderKeys.includes(o.key));
+    const changes = [];
+    orders.forEach(o => (o._units || []).forEach(u => { if (unitStatus(u) !== MRP_ST.DONE) changes.push(changeFor(u, MRP_ST.DONE, u.sets)); }));
+    if (!changes.length) return;
     const label = orders.length === 1 ? `đơn ${orders[0].key}` : `${orders.length} đơn: ${orders.map(o => o.key).join(', ')}`;
-    showConfirm(`Xác nhận kho ĐÃ XUẤT vật tư cho ${label}?\n\nVật tư để dành cho các đơn này sẽ được nhả ra khỏi phần chờ xuất.`, () => {
-        submitOrderStatusChanges(orders.map(o => ({ key: o.key, from: o.status, to: MRP_ST.DONE })),
-            `✅ Đã xác nhận xuất kho cho ${orders.length} đơn.`);
+    showConfirm(`Xác nhận kho ĐÃ XUẤT ĐỦ vật tư cho ${label}?\n\n${changes.length} sản phẩm sẽ chuyển sang Đã xuất, phần vật tư giữ chỗ được nhả ra.`, () => {
+        submitOrderStatusChanges(changes, `✅ Đã xác nhận xuất kho (${changes.length} sản phẩm).`);
     });
 }
 
-function undoIssued(key) {
+// Hoàn tác cả đơn (nhập nhầm): mọi sản phẩm đã xuất / xuất một phần về Chưa xử lý.
+function undoIssued(orderKey) {
     if (!hasPermission('CONFIRM_ISSUED') || !mrpData || mrpSaving) return;
-    const o = mrpData.orders.find(x => x.key === key);
-    if (!o || o.status !== MRP_ST.DONE) return;
-    showConfirm(`Hoàn tác: đưa đơn ${key} từ "Đã xuất" về "Chưa xử lý"?\n\nChỉ dùng khi bấm nhầm. Thao tác này được ghi vào nhật ký.`, () => {
-        submitOrderStatusChanges([{ key, from: o.status, to: MRP_ST.NEW }], `↩ Đã đưa đơn ${key} về Chưa xử lý.`);
+    mrpIndex();
+    const o = mrpData.orders.find(x => x.key === orderKey);
+    if (!o) return;
+    const changes = (o._units || []).filter(u => [MRP_ST.DONE, MRP_ST.PART].includes(unitStatus(u))).map(u => changeFor(u, MRP_ST.NEW));
+    if (!changes.length) return;
+    showConfirm(`Hoàn tác: đưa đơn ${orderKey} (${changes.length} sản phẩm) về "Chưa xử lý"?\n\nChỉ dùng khi nhập nhầm. Thao tác này được ghi vào nhật ký.`, () => {
+        submitOrderStatusChanges(changes, `↩ Đã đưa đơn ${orderKey} về Chưa xử lý.`);
     });
+}
+
+// Ghi số bộ đã xuất cho 1 sản phẩm: 0 = hoàn tác, đủ = Đã xuất, giữa chừng = Xuất một phần.
+function saveUnitIssued(key, rawValue) {
+    if (!hasPermission('CONFIRM_ISSUED') || !mrpData || mrpSaving) return;
+    const { byKey } = mrpIndex();
+    const u = byKey[key];
+    if (!u) return;
+    const n = Math.round(Number(String(rawValue).replace(',', '.')));
+    if (!Number.isFinite(n) || n < 0 || n > u.sets) {
+        showAlert(`Số bộ đã xuất phải từ 0 đến ${u.sets}.`, 'error');
+        renderMrpPanel();
+        return;
+    }
+    if (n === unitIssued(u)) return;
+    let change, msg;
+    if (n === 0) {
+        change = changeFor(u, MRP_ST.NEW);
+        msg = `Đưa ${key} về 0 bộ đã xuất ("Chưa xử lý")?\n\nChỉ dùng khi nhập nhầm.`;
+    } else if (n === u.sets) {
+        change = changeFor(u, MRP_ST.DONE, n);
+        msg = `Xác nhận ${key} đã xuất ĐỦ ${n}/${u.sets} bộ?`;
+    } else {
+        change = changeFor(u, MRP_ST.PART, n);
+        msg = `Ghi nhận ${key} đã xuất ${n}/${u.sets} bộ?\n\nVật tư của ${u.sets - n} bộ còn lại vẫn được giữ chỗ.`;
+    }
+    showConfirm(msg, () => submitOrderStatusChanges([change], `✅ ${key}: đã xuất ${n}/${u.sets} bộ.`));
 }
 
 // ---------------------------------------------------------------------------
-// HIỂN THỊ
+// HIỂN THỊ 2 TAB NHÁNH
 // ---------------------------------------------------------------------------
 function renderMrpPanel() {
     if (!document.getElementById('mrp-panel')) return;
@@ -3522,35 +3649,54 @@ function renderMrpPanel() {
     if (!mrpData) { setMrpStatus('🕒 Chưa tải dữ liệu bóc tách.', false, null); return; }
     setMrpStatus(`🕒 ${mrpData.lastRead ? 'Bóc tách cập nhật lúc ' + mrpData.lastRead : 'Chưa rõ thời điểm cập nhật bóc tách'} · Tồn kho theo lần tải gần nhất của trang`, false, null);
 
-    // Số đếm theo trạng thái ĐÃ LƯU - hiện ở cả 2 tab nhánh.
-    const counts = { [MRP_ST.NEW]: 0, [MRP_ST.WAIT]: 0, [MRP_ST.DONE]: 0 };
-    mrpData.orders.forEach(o => { counts[o.status] = (counts[o.status] || 0) + 1; });
+    const { units } = mrpIndex();
+    const c = { NEW: 0, ACTIVE: 0, DONE: 0 };
+    mrpData.orders.forEach(o => {
+        const a = orderAggregate(o);
+        if (a.status === MRP_ST.NEW) c.NEW++;
+        else if (a.status === MRP_ST.DONE) c.DONE++;
+        else c.ACTIVE++;   // Chờ xuất, Xuất một phần, hoặc lẫn nhiều trạng thái
+    });
     document.getElementById('mrp-stats').innerHTML = `
-        <div class="mrp-stat"><span>Tổng đơn</span><b>${mrpData.orders.length}</b></div>
-        <div class="mrp-stat"><span>Chưa xử lý</span><b>${counts[MRP_ST.NEW]}</b></div>
-        <div class="mrp-stat mrp-stat-warning"><span>Chờ xuất</span><b>${counts[MRP_ST.WAIT]}</b></div>
-        <div class="mrp-stat mrp-stat-success"><span>Đã xuất</span><b>${counts[MRP_ST.DONE]}</b></div>`;
+        <div class="mrp-stat"><span>Tổng đơn · sản phẩm</span><b>${mrpData.orders.length}<small style="font-size:13px; color:var(--text-muted);"> · ${units.length}</small></b></div>
+        <div class="mrp-stat"><span>Chưa xử lý</span><b>${c.NEW}</b></div>
+        <div class="mrp-stat mrp-stat-warning"><span>Chờ / đang xuất</span><b>${c.ACTIVE}</b></div>
+        <div class="mrp-stat mrp-stat-success"><span>Đã xuất đủ</span><b>${c.DONE}</b></div>`;
 
     if (mrpSubTab === 'status') renderMrpStatusTab();
     else renderMrpPickTab();
     renderMrpWarnings();
 }
 
-// Tab nhánh 1: danh sách đơn + trạng thái, Kế hoạch xác nhận Đã xuất / hoàn tác.
+function orderMatchesFilter(o, filter) {
+    if (!filter) return true;
+    const a = orderAggregate(o);
+    if (filter === MRP_ST.PART) return a.mixed || a.status === MRP_ST.PART;
+    if (filter === MRP_ST.WAIT) return a.status === MRP_ST.WAIT || (o._units || []).some(u => unitStatus(u) === MRP_ST.WAIT);
+    return a.status === filter;
+}
+
+function orderToggleCell(o) {
+    const hasProducts = (o._units || []).some(u => u.isProduct);
+    if (!hasProducts) return `<span style="display:inline-block; width:18px;"></span>${escapeHtml(o.key)}`;
+    const open = mrpExpandedOrders.has(o.key);
+    return `<button type="button" class="mrp-order-toggle" data-action="toggle-order" data-key="${escapeHtml(o.key)}" aria-expanded="${open}" aria-label="${open ? 'Thu gọn' : 'Mở'} sản phẩm của đơn ${escapeHtml(o.key)}">${open ? '▾' : '▸'} ${escapeHtml(o.key)}</button>`;
+}
+
+// Tab nhánh 1: trạng thái từng đơn, mở ra từng sản phẩm để nhập số bộ đã xuất.
 function renderMrpStatusTab() {
     const canIssue = hasPermission('CONFIRM_ISSUED');
     const filter = document.getElementById('mrpStatusFilter').value;
     const term = normalizeMrpText(document.getElementById('mrpStatusSearch').value);
-    const list = mrpData.orders.filter(o =>
-        (!filter || o.status === filter) &&
-        (!term || [o.key, o.product, o.project].some(v => normalizeMrpText(v).includes(term))));
+    const list = mrpData.orders.filter(o => orderMatchesFilter(o, filter) &&
+        (!term || [o.key, o.product, o.project].concat((o._units || []).map(u => u.key + ' ' + u.name)).some(v => normalizeMrpText(v).includes(term))));
 
     document.getElementById('mrp-issue-bar').style.display = canIssue ? 'flex' : 'none';
-    const selectable = list.filter(o => o.status !== MRP_ST.DONE);
+    const selectable = list.filter(o => orderAggregate(o).status !== MRP_ST.DONE);
     const selectedVisible = selectable.filter(o => mrpSelectedForIssue.has(o.key)).length;
     const bulkBtn = document.getElementById('btn-mrp-bulk-issue');
     bulkBtn.disabled = mrpSelectedForIssue.size === 0;
-    setMrpButtonBusy(bulkBtn, mrpSaving, `✔ Xác nhận Đã xuất (${mrpSelectedForIssue.size} đơn đã chọn)`);
+    setMrpButtonBusy(bulkBtn, mrpSaving, `✔ Xác nhận Đã xuất đủ (${mrpSelectedForIssue.size} đơn đã chọn)`);
     const allBox = document.getElementById('mrpSelectAllIssue');
     allBox.checked = selectable.length > 0 && selectedVisible === selectable.length;
     allBox.disabled = selectable.length === 0 || mrpSaving;
@@ -3562,42 +3708,62 @@ function renderMrpStatusTab() {
         tbody.innerHTML = `<tr><td colspan="8" style="color:#94a3b8; padding:20px;">Không có đơn hàng nào khớp bộ lọc.</td></tr>`;
         return;
     }
+    const dis = mrpSaving ? ' disabled' : '';
     tbody.innerHTML = list.map(o => {
+        const agg = orderAggregate(o);
+        const upd = unitLatestUpdate(o._units || []);
+        const updated = upd ? `${escapeHtml(upd.by)}<br><span style="color:#94a3b8;">${escapeHtml(upd.at)}</span>` : '<span style="color:#94a3b8;">—</span>';
         const selectCell = canIssue
-            ? `<td>${o.status !== MRP_ST.DONE ? `<input type="checkbox" class="mrp-issue-check" data-key="${escapeHtml(o.key)}"${mrpSelectedForIssue.has(o.key) ? ' checked' : ''}${mrpSaving ? ' disabled' : ''}>` : ''}</td>`
-            : '';
-        const actionCell = canIssue
-            ? `<td>${o.status === MRP_ST.DONE
-                ? `<button type="button" class="btn-refresh mrp-action-btn" data-action="undo" data-key="${escapeHtml(o.key)}"${mrpSaving ? ' disabled' : ''}>↩ Hoàn tác</button>`
-                : `<button type="button" class="btn-refresh mrp-action-btn" data-action="issue" data-key="${escapeHtml(o.key)}"${mrpSaving ? ' disabled' : ''}>✔ Đã xuất</button>`}</td>`
-            : '';
-        const updated = o.statusAt ? `${escapeHtml(o.statusBy)}<br><span style="color:#94a3b8;">${escapeHtml(o.statusAt)}</span>` : '<span style="color:#94a3b8;">—</span>';
-        return `
-            <tr>
+            ? `<td>${agg.status !== MRP_ST.DONE ? `<input type="checkbox" class="mrp-issue-check" aria-label="Chọn đơn ${escapeHtml(o.key)}" data-key="${escapeHtml(o.key)}"${mrpSelectedForIssue.has(o.key) ? ' checked' : ''}${dis}>` : ''}</td>` : '';
+        const anyIssued = (o._units || []).some(u => [MRP_ST.DONE, MRP_ST.PART].includes(unitStatus(u)));
+        const actionCell = canIssue ? `<td style="white-space:nowrap;">${[
+            agg.status !== MRP_ST.DONE ? `<button type="button" class="btn-refresh mrp-action-btn" data-action="issue" data-key="${escapeHtml(o.key)}"${dis}>✔ Đã xuất đủ</button>` : '',
+            anyIssued ? `<button type="button" class="btn-refresh mrp-action-btn" data-action="undo" data-key="${escapeHtml(o.key)}"${dis} title="Đưa mọi sản phẩm của đơn về Chưa xử lý">↩</button>` : ''
+        ].join(' ')}</td>` : '';
+        const orderRow = `
+            <tr class="mrp-order-row">
                 ${selectCell}
-                <td class="text-left font-bold">${escapeHtml(o.key)}</td>
+                <td class="text-left font-bold">${orderToggleCell(o)}</td>
                 <td class="text-left">${escapeHtml(o.product)}</td>
                 <td class="text-left mrp-project-cell">${escapeHtml(o.project)}</td>
                 <td>${escapeHtml(o.date)}</td>
-                <td>${mrpStatusBadge(o.status)}</td>
+                <td>${orderBadge(o)}</td>
                 <td style="font-size:12px;">${updated}</td>
                 ${actionCell}
             </tr>`;
+        if (!mrpExpandedOrders.has(o.key) || !(o._units || []).some(u => u.isProduct)) return orderRow;
+        const productRows = o._units.map(u => {
+            const issued = unitIssued(u);
+            const input = canIssue && u.sets > 0
+                ? `<span class="mrp-issued-edit"><span class="mrp-issued-label">Tổng đã xuất</span><input type="number" class="mrp-issued-input" min="0" max="${u.sets}" step="1" value="${issued}" data-key="${escapeHtml(u.key)}" aria-label="Tổng số bộ đã xuất (lũy kế) của ${escapeHtml(u.key)}" title="Gõ TỔNG số bộ đã xuất tính đến nay (cộng cả các đợt trước), không phải số của riêng đợt này"${dis}> / ${formatMrpQty(u.sets)} bộ
+                   <span class="mrp-issued-remain${issued >= u.sets ? ' is-done' : ''}">${issued >= u.sets ? 'xong' : 'còn ' + formatMrpQty(u.sets - issued)}</span>
+                   <button type="button" class="btn-refresh mrp-action-btn" data-action="save-issued" data-key="${escapeHtml(u.key)}"${dis}>Lưu</button>
+                   ${issued < u.sets ? `<button type="button" class="btn-refresh mrp-action-btn" data-action="full-issued" data-key="${escapeHtml(u.key)}"${dis} title="Điền đủ ${u.sets} bộ">Đủ</button>` : ''}</span>`
+                : `${formatMrpQty(issued)} / ${formatMrpQty(u.sets)} bộ · ${issued >= u.sets ? 'xong' : 'còn ' + formatMrpQty(u.sets - issued)}`;
+            return `
+            <tr class="mrp-product-row">
+                ${canIssue ? '<td></td>' : ''}
+                <td class="text-left" style="padding-left:34px;">${escapeHtml(u.key)}</td>
+                <td class="text-left" colspan="2">${escapeHtml(u.name)}</td>
+                <td style="white-space:nowrap;">${formatMrpQty(u.sets)} bộ</td>
+                <td>${unitStatusBadge(u)}</td>
+                <td style="font-size:12px;">${u.ref.statusAt ? `${escapeHtml(u.ref.statusBy)}<br><span style="color:#94a3b8;">${escapeHtml(u.ref.statusAt)}</span>` : '<span style="color:#94a3b8;">—</span>'}</td>
+                ${canIssue ? `<td style="white-space:nowrap;">${input}</td>` : `<td style="display:none;"></td>`}
+            </tr>`;
+        }).join('');
+        return orderRow + productRows;
     }).join('');
 }
 
-// Tab nhánh 2: tích chọn đơn vào Chờ xuất + bảng tổng hợp vật tư chờ xuất (xem trước cả thay đổi chưa lưu).
+// Tab nhánh 2: tích đơn (cả đơn) hoặc từng sản phẩm vào Chờ xuất + bảng tổng hợp xem trước.
 function renderMrpPickTab() {
     const canWait = hasPermission('EDIT_WAITING_LIST');
     const term = normalizeMrpText(document.getElementById('mrpPickSearch').value);
-    // Chỉ đơn Chưa xử lý / Chờ xuất mới chọn được; Đã xuất đã xong việc.
-    const candidates = mrpData.orders.filter(o => o.status !== MRP_ST.DONE &&
-        (!term || [o.key, o.product, o.project].some(v => normalizeMrpText(v).includes(term))));
+    const candidates = mrpData.orders.filter(o => (o._units || []).some(isUnitPickable) &&
+        (!term || [o.key, o.product, o.project].concat((o._units || []).map(u => u.key + ' ' + u.name)).some(v => normalizeMrpText(v).includes(term))));
 
-    let pendingCount = 0;
-    mrpData.orders.forEach(o => {
-        if (mrpPendingWait.has(o.key) && (mrpPendingWait.get(o.key) ? MRP_ST.WAIT : MRP_ST.NEW) !== o.status) pendingCount++;
-    });
+    const { units } = mrpIndex();
+    const pendingCount = units.filter(u => mrpPendingWait.has(u.key) && effectiveUnitStatus(u) !== unitStatus(u)).length;
     document.getElementById('mrp-pick-actions').style.display = canWait ? 'flex' : 'none';
     document.getElementById('mrp-pick-readonly').style.display = canWait ? 'none' : 'block';
     const saveBtn = document.getElementById('btn-mrp-save-waiting');
@@ -3607,22 +3773,55 @@ function renderMrpPickTab() {
     cancelBtn.style.display = pendingCount ? '' : 'none';
     cancelBtn.disabled = mrpSaving;
 
-    document.getElementById('mrpPickBody').innerHTML = candidates.length === 0
+    const lock = canWait && !mrpSaving ? '' : ' disabled';
+    const body = document.getElementById('mrpPickBody');
+    body.innerHTML = candidates.length === 0
         ? `<tr><td colspan="5" style="color:#94a3b8; padding:20px;">Không có đơn Chưa xử lý / Chờ xuất nào${term ? ' khớp bộ lọc' : ''}.</td></tr>`
         : candidates.map(o => {
-            const eff = effectiveMrpStatus(o);
-            const changed = eff !== o.status;
-            return `
-                <tr class="${changed ? 'mrp-pending-row' : ''}">
-                    <td><input type="checkbox" class="mrp-wait-check" data-key="${escapeHtml(o.key)}"${eff === MRP_ST.WAIT ? ' checked' : ''}${canWait && !mrpSaving ? '' : ' disabled'}></td>
-                    <td class="text-left font-bold">${escapeHtml(o.key)}</td>
+            const pick = o._units.filter(isUnitPickable);
+            const on = pick.filter(u => effectiveUnitStatus(u) === MRP_ST.WAIT).length;
+            const changed = pick.some(u => effectiveUnitStatus(u) !== unitStatus(u));
+            const orderRow = `
+                <tr class="mrp-order-row${changed ? ' mrp-pending-row' : ''}">
+                    <td><input type="checkbox" class="mrp-wait-check" data-scope="order" data-key="${escapeHtml(o.key)}" aria-label="Chờ xuất cả đơn ${escapeHtml(o.key)}"${on === pick.length ? ' checked' : ''}${on > 0 && on < pick.length ? ' data-indeterminate="1"' : ''}${lock}></td>
+                    <td class="text-left font-bold">${orderToggleCell(o)}</td>
                     <td class="text-left">${escapeHtml(o.product)}</td>
                     <td class="text-left mrp-project-cell">${escapeHtml(o.project)}</td>
-                    <td>${mrpStatusBadge(eff)}${changed ? ' <span style="font-size:11px; color:var(--danger); font-weight:700;">chưa lưu</span>' : ''}</td>
+                    <td>${changed ? previewOrderBadge(o) + ' <span style="font-size:11px; color:var(--danger); font-weight:700;">chưa lưu</span>' : orderBadge(o)}</td>
                 </tr>`;
+            if (!mrpExpandedOrders.has(o.key) || !o._units.some(u => u.isProduct)) return orderRow;
+            return orderRow + o._units.map(u => {
+                const pickable = isUnitPickable(u);
+                const eff = effectiveUnitStatus(u);
+                const ch = pickable && eff !== unitStatus(u);
+                return `
+                <tr class="mrp-product-row${ch ? ' mrp-pending-row' : ''}">
+                    <td>${pickable ? `<input type="checkbox" class="mrp-wait-check" data-scope="unit" data-key="${escapeHtml(u.key)}" aria-label="Chờ xuất ${escapeHtml(u.key)}"${eff === MRP_ST.WAIT ? ' checked' : ''}${lock}>` : ''}</td>
+                    <td class="text-left" style="padding-left:34px;">${escapeHtml(u.key)}</td>
+                    <td class="text-left" colspan="2">${escapeHtml(u.name)} <span style="color:#94a3b8;">· ${formatMrpQty(u.sets)} bộ</span></td>
+                    <td>${pickable ? mrpStatusBadge(eff) : unitStatusBadge(u)}${ch ? ' <span style="font-size:11px; color:var(--danger); font-weight:700;">chưa lưu</span>' : ''}</td>
+                </tr>`;
+            }).join('');
         }).join('');
+    // Ô tích "một phần sản phẩm được chọn" - thuộc tính indeterminate chỉ đặt được bằng JS.
+    body.querySelectorAll('input[data-indeterminate="1"]').forEach(b => { b.indeterminate = true; });
 
     renderMrpWaitingSummary(pendingCount);
+}
+
+// Nhãn xem trước của dòng đơn khi có tích chưa lưu: tính theo trạng thái SẼ có sau khi lưu.
+function previewOrderBadge(o) {
+    const sts = (o._units || []).map(u => isUnitPickable(u) ? effectiveUnitStatus(u) : unitStatus(u));
+    if (sts.length && sts.every(x => x === sts[0])) return mrpStatusBadge(sts[0]);
+    const wait = sts.filter(x => x === MRP_ST.WAIT).length;
+    return `<span class="badge badge-part">Một phần · ${wait}/${sts.length} SP chờ xuất</span>`;
+}
+
+function setPendingWait(u, want) {
+    if (!isUnitPickable(u)) return;
+    // Tích về đúng trạng thái đã lưu = không còn là thay đổi.
+    if ((want ? MRP_ST.WAIT : MRP_ST.NEW) === unitStatus(u)) mrpPendingWait.delete(u.key);
+    else mrpPendingWait.set(u.key, want);
 }
 
 function renderMrpWaitingSummary(pendingCount) {
@@ -3637,14 +3836,14 @@ function renderMrpWaitingSummary(pendingCount) {
 
     const shortCount = result.rows.filter(r => r.shortage > 0).length;
     document.getElementById('mrp-summary-caption').innerHTML =
-        `Tổng hợp vật tư của <b>${result.orderCount}</b> đơn Chờ xuất: <b>${result.rows.length}</b> mã, trong đó <b style="color:var(--warning);">${shortCount}</b> mã không đủ tồn` +
+        `Tổng hợp vật tư đang giữ cho <b>${result.unitCount}</b> sản phẩm của <b>${result.orderCount}</b> đơn (Chờ xuất + phần chưa xuất): <b>${result.rows.length}</b> mã, trong đó <b style="color:var(--warning);">${shortCount}</b> mã không đủ tồn` +
         (result.noCodeRows.length ? `, <b>${result.noCodeRows.length}</b> vật tư chưa có mã` : '') +
         (pendingCount ? ` <span style="color:var(--danger); font-weight:700;">(đang xem trước, gồm ${pendingCount} thay đổi chưa lưu)</span>` : '');
 
     const tbody = document.getElementById('mrpTableBody');
     if (!visibleRows.length) {
         tbody.innerHTML = `<tr><td colspan="8" style="color:#94a3b8; padding:20px;">${
-            result.orderCount === 0 ? 'Chưa có đơn nào ở trạng thái Chờ xuất.'
+            result.orderCount === 0 ? 'Chưa có sản phẩm nào đang giữ vật tư (Chờ xuất / Xuất một phần).'
             : result.rows.length === 0 ? 'Các đơn Chờ xuất chưa có vật tư nào có mã kho.'
             : onlyShort && !term ? '✅ Tồn kho đủ cho mọi mã của các đơn Chờ xuất.' : 'Không có mã nào khớp bộ lọc.'}</td></tr>`;
     } else {
@@ -3688,7 +3887,7 @@ function renderMrpWaitingSummary(pendingCount) {
 function renderMrpOrderDetail(orders, unit, useStockUnit) {
     const lines = orders.map(o => `
         <tr>
-            <td class="text-left font-bold">${escapeHtml(o.orderKey)}</td>
+            <td class="text-left font-bold">${escapeHtml(o.orderKey)}${o.partial ? `<br><span style="font-weight:600; font-size:11px; color:#8A5A00;">còn ${formatMrpQty(o.remainSets)}/${formatMrpQty(o.sets)} bộ</span>` : ''}</td>
             <td class="text-left">${escapeHtml(o.product)}</td>
             <td class="text-left mrp-project-cell">${escapeHtml(o.project)}</td>
             <td>${escapeHtml(o.date)}</td>
@@ -3775,10 +3974,26 @@ function bindMrpEvents(on) {
     const statusBody = document.getElementById('mrpStatusBody');
     if (statusBody) {
         statusBody.addEventListener('click', (e) => {
-            const btn = e.target.closest('.mrp-action-btn');
-            if (!btn) return;
-            if (btn.dataset.action === 'issue') confirmIssued([btn.dataset.key]);
-            else if (btn.dataset.action === 'undo') undoIssued(btn.dataset.key);
+            const btn = e.target.closest('[data-action]');
+            if (!btn || btn.disabled) return;
+            const key = btn.dataset.key;
+            if (btn.dataset.action === 'toggle-order') {
+                if (mrpExpandedOrders.has(key)) mrpExpandedOrders.delete(key); else mrpExpandedOrders.add(key);
+                renderMrpPanel();
+            } else if (btn.dataset.action === 'issue') confirmIssued([key]);
+            else if (btn.dataset.action === 'undo') undoIssued(key);
+            else if (btn.dataset.action === 'save-issued') {
+                const input = statusBody.querySelector(`.mrp-issued-input[data-key="${CSS.escape(key)}"]`);
+                if (input) saveUnitIssued(key, input.value);
+            } else if (btn.dataset.action === 'full-issued') {
+                const { byKey } = mrpIndex();
+                if (byKey[key]) saveUnitIssued(key, byKey[key].sets);
+            }
+        });
+        statusBody.addEventListener('keydown', (e) => {
+            // Gõ số rồi Enter = Lưu (không bắt phím toàn trang - chỉ trong ô nhập số bộ).
+            const input = e.target.closest('.mrp-issued-input');
+            if (input && e.key === 'Enter') { e.preventDefault(); saveUnitIssued(input.dataset.key, input.value); }
         });
         statusBody.addEventListener('change', (e) => {
             const box = e.target.closest('.mrp-issue-check');
@@ -3790,15 +4005,24 @@ function bindMrpEvents(on) {
     }
     const pickBody = document.getElementById('mrpPickBody');
     if (pickBody) {
+        pickBody.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-action="toggle-order"]');
+            if (!btn) return;
+            const key = btn.dataset.key;
+            if (mrpExpandedOrders.has(key)) mrpExpandedOrders.delete(key); else mrpExpandedOrders.add(key);
+            renderMrpPanel();
+        });
         pickBody.addEventListener('change', (e) => {
             const box = e.target.closest('.mrp-wait-check');
             if (!box || !hasPermission('EDIT_WAITING_LIST') || mrpSaving) return;
-            const order = mrpData.orders.find(o => o.key === box.dataset.key);
-            if (!order) return;
-            // Tích lại về đúng trạng thái đã lưu = không còn là thay đổi -> xóa khỏi danh sách chờ lưu.
-            const wantWait = box.checked;
-            if ((wantWait ? MRP_ST.WAIT : MRP_ST.NEW) === order.status) mrpPendingWait.delete(order.key);
-            else mrpPendingWait.set(order.key, wantWait);
+            const { byKey } = mrpIndex();
+            if (box.dataset.scope === 'order') {
+                // Tích cả đơn = áp cho mọi sản phẩm còn tích được của đơn.
+                const o = mrpData.orders.find(x => x.key === box.dataset.key);
+                if (o) o._units.forEach(u => setPendingWait(u, box.checked));
+            } else if (byKey[box.dataset.key]) {
+                setPendingWait(byKey[box.dataset.key], box.checked);
+            }
             renderMrpPanel();
         });
     }
@@ -3850,7 +4074,7 @@ function exportMrp() {
     const aoa = [
         ['ĐỀ XUẤT MUA VẬT TƯ - THEO ĐƠN HÀNG CHỜ XUẤT'],
         [`Ngày lập: ${nowText}     Người lập: ${(currentUser && (currentUser.name || currentUser.email)) || ''}`],
-        [`Căn cứ: ${lastMrpView.orderKeys.length} đơn Chờ xuất (${lastMrpView.orderKeys.join(', ')})` +
+        [`Căn cứ: ${lastMrpView.orderKeys.length} sản phẩm/đơn đang giữ vật tư (${lastMrpView.orderKeys.join(', ')})` +
             (lastMrpView.pendingCount ? ` - GỒM ${lastMrpView.pendingCount} thay đổi CHƯA LƯU` : '') +
             (lastMrpView.filtered ? ' - theo bộ lọc đang xem trên app' : '')],
         ['Thiếu = Chờ xuất − Tồn kế toán − Đi đường. Đề xuất mua: làm tròn lên số nguyên với đơn vị đếm (tấm, cây, cái, bộ...).'],
