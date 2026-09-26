@@ -524,6 +524,10 @@ function toggleStockFilter(mode) {
 // nhưng mặc định ẩn đi cho bảng gọn, chỉ hiện khi anh cần xem chi tiết biến động thay vì chỉ mỗi tồn cuối.
 // Không áp dụng cho tab Giá TB vì sheet đó không có khái niệm nhập/xuất.
 let showMovementColumns = false;
+// Kế toán cho hiện cả mã tồn 0 (gần gấp 3 số mã) -> bảng mặc định ẨN mã tồn 0 cho gọn và nhẹ máy.
+// Vẫn luôn hiện: mã tồn 0 CÓ đặt Min (đang báo Hết hàng), mã có hàng đang về khi bật "Cộng đi đường",
+// và mã gõ ĐÚNG vào ô tìm kiếm. Các phần cân đối / gợi ý thép tấm vẫn dùng đủ danh sách (cần cả mã tồn 0).
+let showZeroStock = false;
 
 function toggleMovementColumns() {
     showMovementColumns = !showMovementColumns;
@@ -743,8 +747,10 @@ function bindStaticUiEvents() {
     on('stat-low-wrap', 'click', () => toggleStockFilter('low'));
     on('stat-out-wrap', 'click', () => toggleStockFilter('out'));
     on('stat-high-wrap', 'click', () => toggleStockFilter('high'));
-    on('searchInput', 'keyup', renderTable);
+    // 'input' bắt cả gõ phím lẫn dán bằng chuột (keyup bỏ sót trường hợp dán bằng chuột phải)
+    on('searchInput', 'input', renderTable);
     on('btn-toggle-movement', 'click', toggleMovementColumns);
+    on('chkShowZero', 'change', (e) => { showZeroStock = e.target.checked; renderTable(); });
     on('btn-toggle-chart', 'click', toggleStockChart);
     on('btn-export-inventory', 'click', exportToExcel);
 
@@ -1756,6 +1762,17 @@ function renderDashboardInsights(items, isPriceView) {
         </div>`;
 }
 
+// Ô "Số mã": số mã đang hiện; khi đang ẩn mã tồn 0 thì ghi thêm "/ tổng" (kể cả mã tồn 0) để khỏi hiểu nhầm.
+function setStatTotal(shown, scopeTotal, isPriceView) {
+    const el = document.getElementById('stat-total');
+    if (!el) return;
+    const hiding = !isPriceView && !showZeroStock && scopeTotal > shown;
+    el.innerHTML = hiding
+        ? `${shown.toLocaleString('en-US')}<span class="stat-bar-sub"> / ${scopeTotal.toLocaleString('en-US')}</span>`
+        : shown.toLocaleString('en-US');
+    el.title = hiding ? `${shown} mã đang hiện (có tồn hoặc đang cảnh báo) / ${scopeTotal} mã kể cả tồn 0` : '';
+}
+
 function renderTable() {
     const searchTerm = (document.getElementById('searchInput').value || '').toLowerCase();
     const tbody = document.getElementById('inventory-table-body');
@@ -1777,6 +1794,14 @@ function renderTable() {
         const matchesTag = itemMatchesActiveTag(item);
         return matchesSearch && matchesCategory && matchesTag;
     });
+    const scopeCount = baseFilteredData.length;   // kể cả mã tồn 0 - để ô Số mã ghi "có tồn / tổng"
+    if (!isPriceView && !showZeroStock) {
+        const keep = item => accountingStockOf(item) > 0 || item.stock > 0 || getStockStatus(item) !== 'normal'
+            || (searchTerm && String(item.id == null ? '' : item.id).toLowerCase() === searchTerm.trim());
+        for (let i = baseFilteredData.length - 1; i >= 0; i--) if (!keep(baseFilteredData[i])) baseFilteredData.splice(i, 1);
+    }
+    const zeroWrap = document.getElementById('wrap-show-zero');
+    if (zeroWrap) zeroWrap.style.display = isPriceView ? 'none' : '';
 
     // Dashboard Tổng dùng đúng tập dữ liệu sau tìm kiếm/hashtag nhưng không phụ thuộc bộ lọc trạng thái đang bấm.
     renderDashboardInsights(baseFilteredData, isPriceView);
@@ -1825,8 +1850,8 @@ function renderTable() {
     const totalColumns = isPriceView ? 5 : (4 + (showMovement ? 3 : 0) + (showCategoryColumn ? 1 : 0));
 
     if (filteredData.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="${totalColumns}" style="color:#94a3b8; padding:20px;">Không tìm thấy vật tư phù hợp.</td></tr>`;
-        document.getElementById('stat-total').innerText = 0;
+        tbody.innerHTML = `<tr><td colspan="${totalColumns}" style="color:#94a3b8; padding:20px;">Không tìm thấy vật tư phù hợp.${!isPriceView && !showZeroStock && scopeCount ? ' Có thể mã đang tồn 0 – tích "Hiện cả mã tồn 0" để xem.' : ''}</td></tr>`;
+        setStatTotal(0, scopeCount, isPriceView);
         updateSteelPlateMassStat(filteredData, isPriceView);
         updateStockWarningStats(baseFilteredData, isPriceView);
         lastRenderedData = [];
@@ -1886,7 +1911,7 @@ function renderTable() {
         tbody.innerHTML = rowsHtml.join('');
     }
 
-    document.getElementById('stat-total').innerText = filteredData.length;
+    setStatTotal(filteredData.length, scopeCount, isPriceView);
     updateSteelPlateMassStat(filteredData, isPriceView);
     updateStockWarningStats(baseFilteredData, isPriceView);
 
