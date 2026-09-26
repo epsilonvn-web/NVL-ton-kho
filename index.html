@@ -276,6 +276,17 @@
         .mrp-action-btn { padding: 4px 10px; min-height: 28px; font-size: 12px; }
         .mrp-pick-list { max-height: 420px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; margin-bottom: 12px; }
         .mrp-pending-row td { background: #fff8e6; }
+        /* Đơn -> sản phẩm (sheet con) */
+        .badge-part { background: #FFF1D6; color: #8A5A00; }
+        .mrp-order-toggle { background: none; border: none; padding: 4px 2px; min-height: 28px; font: inherit; font-weight: 700; color: var(--vh-navy); cursor: pointer; white-space: nowrap; }
+        .mrp-order-toggle:hover { color: var(--vh-blue); }
+        .mrp-product-row td { background: #F8FAFC; font-size: 12.5px; }
+        .mrp-issued-edit { display: inline-flex; align-items: center; gap: 6px; }
+        .mrp-issued-input { width: 64px; padding: 4px 6px; border: 1.5px solid #cfe3ef; border-radius: 6px; font: inherit; font-weight: 700; text-align: right; }
+        .mrp-issued-input:focus { outline: none; border-color: var(--vh-blue); }
+        .mrp-issued-label { font-size: 11.5px; font-weight: 600; color: var(--text-muted); white-space: nowrap; }
+        .mrp-issued-remain { font-size: 11.5px; font-weight: 700; color: #8A5A00; background: #FFF1D6; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+        .mrp-issued-remain.is-done { color: var(--vh-green-dark); background: #E9F6EF; }
         .mrp-row { cursor: pointer; }
         .mrp-row:hover td { background: #f1f7fc; }
         .mrp-row.is-open td { background: #eaf3fb; }
@@ -967,15 +978,16 @@
 
             <!-- TAB NHÁNH 1: TRẠNG THÁI ĐƠN HÀNG -->
             <div id="mrp-sub-status">
-                <p class="mrp-hint">Đơn mới từ bóc tách là <b>Chưa xử lý</b> và chưa tác động gì. Đơn được đưa vào <b>Chờ xuất</b> ở tab "Chọn đơn chờ xuất".
-                    Khi kho xuất thực tế, bộ phận Kế hoạch xác nhận <b>Đã xuất</b> (được chuyển thẳng từ Chưa xử lý). Mọi thay đổi đều được ghi nhật ký.</p>
+                <p class="mrp-hint">Bấm <b>▸ mã đơn</b> để mở các sản phẩm (sheet con). Đơn lớn làm nhiều đợt: Kế hoạch nhập <b>số bộ đã xuất</b> cho từng sản phẩm –
+                    vật tư của số bộ còn lại vẫn được giữ chỗ. Nút <b>Đã xuất đủ</b> áp cho cả đơn. Mọi thay đổi đều được ghi nhật ký.</p>
                 <div class="search-bar-row">
                     <input type="text" id="mrpStatusSearch" class="form-control search-bar" placeholder="Tìm mã đơn (VD 26-169), sản phẩm, dự án...">
                     <select id="mrpStatusFilter" class="form-control mrp-select">
                         <option value="">Tất cả trạng thái</option>
                         <option value="Chưa xử lý">Chưa xử lý</option>
                         <option value="Chờ xuất">Chờ xuất</option>
-                        <option value="Đã xuất">Đã xuất</option>
+                        <option value="Xuất một phần">Xuất một phần</option>
+                        <option value="Đã xuất">Đã xuất đủ</option>
                     </select>
                 </div>
                 <div id="mrp-issue-bar" class="mrp-action-bar" style="display:none;">
@@ -1003,7 +1015,7 @@
 
             <!-- TAB NHÁNH 2: CHỌN ĐƠN CHỜ XUẤT -->
             <div id="mrp-sub-pick" style="display:none;">
-                <p class="mrp-hint">Tích các đơn cần chuẩn bị vật tư rồi bấm <b>Lưu</b>. Danh mục chờ được <b>cộng dồn</b> qua các ngày - đơn đã tích hôm trước vẫn được giữ phần vật tư.
+                <p class="mrp-hint">Tích cả đơn, hoặc bấm <b>▸ mã đơn</b> để tích riêng từng sản phẩm cần chuẩn bị, rồi bấm <b>Lưu</b>. Danh mục chờ được <b>cộng dồn</b> qua các ngày - đơn đã tích hôm trước vẫn được giữ phần vật tư.
                     Toàn bộ vật tư bóc tách của đơn Chờ xuất là phần mà công tắc "Tồn đã trừ chờ xuất" trừ khỏi tồn kho, dù kho chưa xuất thật.</p>
                 <div id="mrp-pick-readonly" class="mrp-note" style="display:none;">👁 Anh/chị đang ở chế độ xem. Chỉ người được giao quyền "Chọn đơn vào chờ xuất" mới tích chọn được.</div>
                 <div class="search-bar-row">
@@ -1168,7 +1180,7 @@
     </div>
 
     <!-- Logic ứng dụng đặt cuối body: DOM đã dựng xong trước khi app.js khởi tạo -->
-    <script src="assets/js/app.js?v=20260925-transit5"></script>
+    <script src="assets/js/app.js?v=20260926-product3"></script>
 
 </body>
 </html>
